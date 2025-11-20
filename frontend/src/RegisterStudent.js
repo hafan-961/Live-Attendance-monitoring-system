@@ -88,7 +88,7 @@ export default function RegisterStudent() {
     };
 
     update();
-    interval = setInterval(update, 500); // Update every 500ms
+    interval = setInterval(update, 100); // Update every 500ms
 
     return () => {
       clearInterval(interval);
@@ -104,14 +104,18 @@ export default function RegisterStudent() {
 
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
+    const img = imgRef.current;
 
-    canvas.width = imgRef.current.width || 640;
-    canvas.height = imgRef.current.height || 480;
+    // Use naturalWidth and naturalHeight to get the actual image dimensions
+    // This ensures we capture the full image, not just the displayed size
+    canvas.width = img.naturalWidth || img.width || 640;
+    canvas.height = img.naturalHeight || img.height || 480;
 
-    ctx.drawImage(imgRef.current, 0, 0);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-    const base64data = canvas.toDataURL("image/jpeg");
+    const base64data = canvas.toDataURL("image/jpeg", 0.95);
     setCapturedImage(base64data);
+    console.log(`Captured image: ${canvas.width}x${canvas.height}`);
   };
 
   // ------------------ SUBMIT REGISTRATION ------------------
@@ -173,8 +177,8 @@ export default function RegisterStudent() {
       <img
         ref={imgRef}
         alt="Live Camera"
-        width={400}
-        height={300}
+        width={640}
+        height={480}
         style={{
           border: "2px solid black",
           background: "black",
@@ -199,7 +203,7 @@ export default function RegisterStudent() {
 
       <h3>Captured Image</h3>
       {capturedImage ? (
-        <img src={capturedImage} alt="Captured" width={200} />
+        <img src={capturedImage} alt="Captured" width={400} style={{ border: "2px solid green" }} />
       ) : (
         <p>No image captured</p>
       )}
