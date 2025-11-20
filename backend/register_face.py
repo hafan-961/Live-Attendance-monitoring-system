@@ -10,7 +10,7 @@ os.makedirs("registered_faces", exist_ok=True)
 csv_file = "students.csv"
 
 # camera feed
-url = "http://10.217.72.237:8080/video"   # ← your current working link. 
+url = "http://10.208.138.152:8080/video"   # ← your current working link. 
 print("Connecting to camera:", url)
 cap = cv2.VideoCapture(url)
 

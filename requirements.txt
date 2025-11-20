@@ -1,0 +1,33 @@
+# # Python
+# __pycache__/
+# *.pyc
+# *.pyo
+# *.pyd
+# env/
+# venv/
+# .env
+
+# # macOS
+# .DS_Store
+
+# # VS Code
+# .vscode/
+
+# # Node
+# node_modules/
+# build/
+# dist/
+
+# # Logs
+# *.log
+
+# # Cache
+# .cache/
+
+fastapi==0.111.0
+uvicorn==0.30.1
+opencv-python==4.9.0.80 # Or similar recent version
+numpy==1.26.4 # Or similar recent version
+pandas==2.2.2 # Or similar recent version
+insightface==0.7.0 # Or whatever version you intend to use
+python-multipart==0.0.9 # Needed for File and Form in FastAPI

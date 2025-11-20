@@ -6,28 +6,44 @@ export default function RegisterStudent() {
 
   const [cameraUrl, setCameraUrl] = useState("");
   const [capturedImage, setCapturedImage] = useState("");
-
   const [name, setName] = useState("");
   const [regNo, setRegNo] = useState("");
   const [rollNo, setRollNo] = useState("");
   const [section, setSection] = useState("");
-
   const [errorMsg, setErrorMsg] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  // BACKEND URL - Change this if your backend is on a different address
+  const BACKEND_URL = "http://127.0.0.1:8000";
 
   // ------------------ GET CAMERA URL (from backend) ------------------
   useEffect(() => {
     async function loadCameraUrl() {
       try {
-        const res = await fetch("http://127.0.0.1:8000/camera_url");
+        console.log("Fetching camera URL from:", `${BACKEND_URL}/camera_url`);
+        const res = await fetch(`${BACKEND_URL}/camera_url`);
+        console.log("Response status:", res.status);
+        
+        if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        
         const data = await res.json();
-
+        console.log("Camera URL response:", data);
+        
         if (data.image_url) {
-          setCameraUrl(data.image_url); // <-- correct field
+          setCameraUrl(data.image_url);
+          setErrorMsg("");
+          setLoading(false);
+          console.log("✅ Camera URL loaded successfully");
         } else {
           setErrorMsg("Camera URL not found in backend response.");
+          setLoading(false);
         }
       } catch (err) {
-        setErrorMsg("Failed to fetch camera URL.");
+        console.error("Error:", err);
+        setErrorMsg(
+          `❌ Failed to connect to backend!\n\nMake sure:\n1. Backend is running on ${BACKEND_URL}\n2. Error: ${err.message}`
+        );
+        setLoading(false);
       }
     }
 
@@ -38,25 +54,59 @@ export default function RegisterStudent() {
   useEffect(() => {
     if (!cameraUrl || !imgRef.current) return;
 
-    const update = () => {
-      imgRef.current.src = `${cameraUrl}?t=${Date.now()}`;
+    let interval;
+    const update = async () => {
+      try {
+        const res = await fetch(cameraUrl);
+        if (!res.ok) throw new Error("Camera feed error");
+        
+        const data = await res.json();
+        
+        if (data.content) {
+          // Convert base64 to blob and create object URL
+          const base64String = data.content;
+          const byteCharacters = atob(base64String);
+          const byteNumbers = new Array(byteCharacters.length);
+          
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+          }
+          
+          const byteArray = new Uint8Array(byteNumbers);
+          const blob = new Blob([byteArray], { type: "image/jpeg" });
+          const url = URL.createObjectURL(blob);
+          
+          imgRef.current.src = url;
+          setErrorMsg("");
+        } else if (data.error) {
+          setErrorMsg(`Camera error: ${data.error}`);
+        }
+      } catch (err) {
+        console.error("Camera update error:", err);
+        setErrorMsg(`Camera feed error: ${err.message}`);
+      }
     };
 
     update();
-    const interval = setInterval(update, 300);
+    interval = setInterval(update, 500); // Update every 500ms
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+    };
   }, [cameraUrl]);
 
   // ------------------ CAPTURE IMAGE ------------------
   const captureFace = () => {
-    if (!imgRef.current) return;
+    if (!imgRef.current || !imgRef.current.src) {
+      alert("Camera feed not ready. Please wait...");
+      return;
+    }
 
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
 
-    canvas.width = imgRef.current.width;
-    canvas.height = imgRef.current.height;
+    canvas.width = imgRef.current.width || 640;
+    canvas.height = imgRef.current.height || 480;
 
     ctx.drawImage(imgRef.current, 0, 0);
 
@@ -71,25 +121,40 @@ export default function RegisterStudent() {
       return;
     }
 
-    const blob = await (await fetch(capturedImage)).blob();
-    const formData = new FormData();
-
-    formData.append("name", name);
-    formData.append("reg_no", regNo);
-    formData.append("roll_no", rollNo);
-    formData.append("section", section);
-    formData.append("image", blob, "face.jpg");
+    if (!name || !regNo || !rollNo || !section) {
+      alert("Please fill all student details!");
+      return;
+    }
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/register", {
+      const blob = await (await fetch(capturedImage)).blob();
+      const formData = new FormData();
+
+      formData.append("name", name);
+      formData.append("reg_no", regNo);
+      formData.append("roll_no", rollNo);
+      formData.append("section", section);
+      formData.append("image", blob, "face.jpg");
+
+      const res = await fetch(`${BACKEND_URL}/register`, {
         method: "POST",
         body: formData,
       });
+
       const data = await res.json();
 
-      alert(data.message || "Registered successfully!");
+      if (data.status === "success") {
+        alert(data.message || "Registered successfully!");
+        setName("");
+        setRegNo("");
+        setRollNo("");
+        setSection("");
+        setCapturedImage("");
+      } else {
+        alert(data.error || "Registration failed.");
+      }
     } catch (err) {
-      alert("Registration failed.");
+      alert(`Registration error: ${err.message}`);
     }
   };
 
@@ -97,7 +162,12 @@ export default function RegisterStudent() {
     <div style={{ padding: 20 }}>
       <h1>Register Student</h1>
 
-      {errorMsg && <p style={{ color: "red" }}>{errorMsg}</p>}
+      {errorMsg && (
+        <p style={{ color: "red", fontWeight: "bold", whiteSpace: "pre-wrap" }}>
+          {errorMsg}
+        </p>
+      )}
+      {loading && <p style={{ color: "orange" }}>Loading camera...</p>}
 
       {/* LIVE CAMERA FEED */}
       <img
@@ -109,10 +179,21 @@ export default function RegisterStudent() {
           border: "2px solid black",
           background: "black",
           display: "block",
+          marginBottom: 10,
         }}
       />
 
-      <button onClick={captureFace} style={{ marginTop: 10 }}>
+      <button
+        onClick={captureFace}
+        style={{
+          padding: "10px 20px",
+          background: "#4CAF50",
+          color: "white",
+          border: "none",
+          borderRadius: "5px",
+          cursor: "pointer",
+        }}
+      >
         Capture Face
       </button>
 
@@ -131,25 +212,33 @@ export default function RegisterStudent() {
         placeholder="Full Name"
         value={name}
         onChange={(e) => setName(e.target.value)}
-      /><br /><br />
+        style={{ padding: "8px", marginBottom: "10px", width: "200px" }}
+      />
+      <br />
 
       <input
         placeholder="Register Number"
         value={regNo}
         onChange={(e) => setRegNo(e.target.value)}
-      /><br /><br />
+        style={{ padding: "8px", marginBottom: "10px", width: "200px" }}
+      />
+      <br />
 
       <input
         placeholder="Roll Number"
         value={rollNo}
         onChange={(e) => setRollNo(e.target.value)}
-      /><br /><br />
+        style={{ padding: "8px", marginBottom: "10px", width: "200px" }}
+      />
+      <br />
 
       <input
         placeholder="Section"
         value={section}
         onChange={(e) => setSection(e.target.value)}
-      /><br /><br />
+        style={{ padding: "8px", marginBottom: "10px", width: "200px" }}
+      />
+      <br />
 
       <button
         onClick={handleSubmit}
@@ -157,6 +246,10 @@ export default function RegisterStudent() {
           background: "blue",
           color: "white",
           padding: "10px 20px",
+          border: "none",
+          borderRadius: "5px",
+          cursor: "pointer",
+          marginTop: "10px",
         }}
       >
         Submit

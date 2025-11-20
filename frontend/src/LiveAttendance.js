@@ -5,7 +5,7 @@ function LiveAttendance() {
   const [results, setResults] = useState([]);
 
   // Your fixed phone camera URL (match backend!)
-  const CAMERA_URL = "http://10.217.72.237:8080/video";
+  const CAMERA_URL = "http://10.208.138.152:8080/video";
 
   useEffect(() => {
     // Auto-load camera stream when page opens
