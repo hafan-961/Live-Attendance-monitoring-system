@@ -1,7 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+
 import uvicorn
 import cv2
 import numpy as np
@@ -10,11 +10,11 @@ import os
 import pickle
 import requests
 from datetime import datetime
-from insightface.app import FaceAnalysis
 
-# ---------------------- INIT APP ----------------------
+# ---- ALWAYS LOAD APP FIRST (prevents app-not-found error) ----
 app = FastAPI()
 
+# ---- CORS ----
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -23,84 +23,93 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ---------------------- INSIGHTFACE SETUP ----------------------
-face_app = FaceAnalysis(name="buffalo_l", providers=["CPUExecutionProvider"])
-face_app.prepare(ctx_id=0, det_size=(640, 640))
+# ---- Load InsightFace safely ----
+try:
+    from insightface.app import FaceAnalysis
+    face_app = FaceAnalysis(name="buffalo_l", providers=["CPUExecutionProvider"])
+    face_app.prepare(ctx_id=0, det_size=(640, 640))
+    insight_loaded = True
+    print("✅ InsightFace loaded successfully")
+except Exception as e:
+    print("❌ InsightFace failed to load:", e)
+    insight_loaded = False
 
-# Create registered_faces folder if it doesn't exist
+# ---- Storage ----
 REGISTERED_FACES_DIR = "registered_faces"
 os.makedirs(REGISTERED_FACES_DIR, exist_ok=True)
 
 EMBEDDINGS_PATH = "embeddings.pkl"
 
-# Initialize known_faces as list
-if os.path.exists(EMBEDDINGS_PATH):
-    try:
-        with open(EMBEDDINGS_PATH, "rb") as f:
-            data = pickle.load(f)
-            # Ensure it's a list, not a dict
-            known_faces = data if isinstance(data, list) else []
-    except Exception as e:
-        print(f"Error loading embeddings: {e}")
+try:
+    known_faces = pickle.load(open(EMBEDDINGS_PATH, "rb"))
+    if not isinstance(known_faces, list):
         known_faces = []
-else:
+except:
     known_faces = []
 
-print(f"Loaded {len(known_faces)} known faces")
+print(f"✅ Loaded {len(known_faces)} known faces")
 
-# ---------------------- CAMERA CONFIGURATION ----------------------
-CAMERA_IP = "http://10.208.138.152:8080/shot.jpg"  # Your IP camera URL
+attendance_records = []
 
-# ---------------------- CAMERA URL (FIXED) ----------------------
+# ---- Camera ----
+CAMERA_IP = "http://10.168.33.206:8080/shot.jpg"
+
+
+# -----------------------------------------------------------
+# ENDPOINT: Check camera URL
+# -----------------------------------------------------------
 @app.get("/camera_url")
 def camera_url():
     return {
-        "image_url": "http://127.0.0.1:8000/camera_feed",
-        "video_url": CAMERA_IP
+        "video_url": CAMERA_IP,
+        "image_url": "http://127.0.0.1:8000/camera_feed"
     }
 
-# ---------------------- CAMERA FEED ENDPOINT ----------------------
+
+# -----------------------------------------------------------
+# ENDPOINT: Camera Feed
+# -----------------------------------------------------------
 @app.get("/camera_feed")
-def get_camera_feed():
-    """
-    Proxies the IP camera feed and returns base64 encoded image
-    """
-    import requests
-    
+def camera_feed():
     try:
-        # Fetch image from IP camera
-        response = requests.get(CAMERA_IP, timeout=5)
+        print("📷 Fetching camera feed...")
+        res = requests.get(CAMERA_IP, timeout=5)
         
-        if response.status_code != 200:
-            return {"error": f"Camera returned status {response.status_code}"}
+        if res.status_code != 200:
+            print(f"❌ Camera returned status {res.status_code}")
+            return {"error": f"Camera returned status {res.status_code}"}
         
-        # Read image from response
-        nparr = np.frombuffer(response.content, np.uint8)
+        nparr = np.frombuffer(res.content, np.uint8)
         frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         
         if frame is None:
+            print("❌ Failed to decode frame")
             return {"error": "Failed to decode frame"}
         
-        # Resize frame for faster streaming
         frame = cv2.resize(frame, (640, 480))
+        _, buffer = cv2.imencode(".jpg", frame)
         
-        # Encode frame to JPEG
-        _, buffer = cv2.imencode('.jpg', frame)
-        img_bytes = buffer.tobytes()
-        
+        print("✅ Camera feed sent successfully")
+
         return {
-            "content": base64.b64encode(img_bytes).decode('utf-8'),
+            "content": base64.b64encode(buffer).decode(),
             "type": "image/jpeg"
         }
-    
+
     except requests.exceptions.Timeout:
+        print("❌ Camera connection timeout")
         return {"error": "Camera connection timeout"}
     except requests.exceptions.ConnectionError:
+        print(f"❌ Cannot connect to camera at {CAMERA_IP}")
         return {"error": f"Cannot connect to camera at {CAMERA_IP}"}
     except Exception as e:
-        return {"error": f"Camera error: {str(e)}"}
+        print(f"❌ Camera error: {str(e)}")
+        return {"error": str(e)}
 
-# ---------------------- REGISTER FACE ----------------------
+
+# -----------------------------------------------------------
+# ENDPOINT: Register Student
+# -----------------------------------------------------------
 @app.post("/register")
 async def register_student(
     name: str = Form(...),
@@ -110,113 +119,150 @@ async def register_student(
     image: UploadFile = File(...)
 ):
     try:
+        if not insight_loaded:
+            return {"error": "InsightFace failed to load"}
+
         img_bytes = await image.read()
         nparr = np.frombuffer(img_bytes, np.uint8)
         frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        
+
         if frame is None:
             return {"error": "Invalid image format"}
-        
-        # Detect faces
+
         faces = face_app.get(frame)
-        
         if len(faces) == 0:
             return {"error": "No face detected"}
-        
-        # Extract embedding
-        face_embedding = faces[0].embedding.tolist()
-        
-        # Save the image with register number as filename
-        image_filename = f"{reg_no}_{name}.jpg"
-        image_path = os.path.join(REGISTERED_FACES_DIR, image_filename)
-        cv2.imwrite(image_path, frame)
-        
-        # Create student record
-        student_record = {
+
+        emb = faces[0].embedding.tolist()
+
+        filename = f"{reg_no}_{name}.jpg"
+        path = os.path.join(REGISTERED_FACES_DIR, filename)
+        cv2.imwrite(path, frame)
+
+        student = {
             "name": name,
             "register_no": reg_no,
             "roll_no": roll_no,
             "section": section,
-            "embedding": face_embedding,
-            "image_path": image_path
+            "embedding": emb,
+            "image_path": path
         }
-        
-        # Ensure known_faces is a list
-        if not isinstance(known_faces, list):
-            known_faces.clear()
-        
-        # Add to known faces
-        known_faces.append(student_record)
-        
-        # Save to pickle file
-        with open(EMBEDDINGS_PATH, "wb") as f:
-            pickle.dump(known_faces, f)
-        
+
+        known_faces.append(student)
+        pickle.dump(known_faces, open(EMBEDDINGS_PATH, "wb"))
+
         print(f"✅ Student registered: {name}")
-        print(f"   📁 Image saved to: {image_path}")
-        print(f"   Total registered: {len(known_faces)}")
-        
-        return {
-            "status": "success",
-            "message": f"Student {name} registered successfully!",
-            "image_path": image_path
-        }
-    
+        return {"status": "success", "message": f"Student {name} registered successfully!"}
+
     except Exception as e:
         print(f"❌ Registration error: {str(e)}")
-        return {"error": f"Registration failed: {str(e)}"}
+        return {"error": str(e)}
 
-# ---------------------- MARK ATTENDANCE ----------------------
-@app.post("/mark_attendance")
-async def mark_attendance(image: UploadFile = File(...)):
+
+# -----------------------------------------------------------
+# ENDPOINT: Start Attendance
+# -----------------------------------------------------------
+@app.post("/start_attendance")
+def start_attendance():
+
+    if not insight_loaded:
+        return {"error": "InsightFace failed to load"}
+
     try:
-        img_bytes = await image.read()
-        nparr = np.frombuffer(img_bytes, np.uint8)
+        print("📷 Starting attendance capture...")
+        res = requests.get(CAMERA_IP, timeout=5)
+        
+        if res.status_code != 200:
+            return {"error": "Failed to capture frame from camera"}
+        
+        nparr = np.frombuffer(res.content, np.uint8)
         frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        
+
+        if frame is None:
+            return {"error": "Failed to decode frame"}
+
         faces = face_app.get(frame)
-        
         if len(faces) == 0:
-            return {"status": "no_face"}
-        
-        detected = faces[0].embedding
-        best_match = None
-        best_score = 999
-        
-        for person in known_faces:
-            db_emb = np.array(person["embedding"])
-            distance = np.linalg.norm(detected - db_emb)
-            if distance < best_score:
-                best_score = distance
-                best_match = person
-        
-        if best_score < 0.8 and best_match:
-            timestamp = datetime.now().strftime("%H:%M:%S")
-            record = {
-                "Register_No": best_match["register_no"],
-                "Name": best_match["name"],
-                "Roll_No": best_match["roll_no"],
-                "Section": best_match["section"],
-                "Time": timestamp,
-                "Status": "Present"
-            }
-            attendance_records.append(record)
-            return record
-        else:
-            return {"status": "unknown"}
+            # DEBUG: Save image to check why face is not detected
+            cv2.imwrite("debug_no_face.jpg", frame)
+            print("❌ No face detected. Saved frame to 'debug_no_face.jpg'")
+            return {"status": "no_face", "detected": [], "error": "No face detected"}
+
+        detected = []
+        for face in faces:
+            emb = face.embedding
+            best_match = None
+            best_score = 999
+
+            for person in known_faces:
+                db = np.array(person["embedding"])
+                score = np.linalg.norm(emb - db)
+
+                if score < best_score:
+                    best_score = score
+                    best_match = person
+
+            if best_score < 1.0 and best_match:
+                record = {
+                    "Register_No": best_match["register_no"],
+                    "Name": best_match["name"],
+                    "Roll_No": best_match["roll_no"],
+                    "Section": best_match["section"],
+                    "Time": datetime.now().strftime("%H:%M:%S"),
+                    "Status": "Present"
+                }
     
+                # Avoid duplicate records
+                duplicate = False
+                for existing in attendance_records:
+                    if existing["Register_No"] == record["Register_No"] and existing["Time"] == record["Time"]:
+                        duplicate = True
+                        break
+
+                if not duplicate:
+                    attendance_records.append(record)
+                    detected.append(record)
+                print(f"✅ Match found: {best_match['name']} (Score: {best_score:.2f})")
+            else:
+                print(f"❌ Unknown face. Best score: {best_score:.2f} (Threshold: 1.0)")
+
+        print(f"✅ Detected {len(detected)} student(s)")
+        return {"status": "success", "detected": detected}
+
     except Exception as e:
-        return {"error": f"Attendance marking failed: {str(e)}"}
+        print(f"❌ Attendance error: {str(e)}")
+        return {"error": str(e)}
 
-# ---------------------- GET ATTENDANCE RECORDS ----------------------
-# Store attendance records in memory (you can use a database later)
-attendance_records = []
 
+# -----------------------------------------------------------
+# GET ATTENDANCE
+# -----------------------------------------------------------
 @app.get("/attendance")
 def get_attendance():
-    # Return list of attendance records
     return attendance_records
 
-# ---------------------- START SERVER ----------------------
+
+# -----------------------------------------------------------
+# GET REGISTERED STUDENTS
+# -----------------------------------------------------------
+@app.get("/students")
+def get_students():
+    # Return list of students without embeddings (too large)
+    students_list = []
+    for person in known_faces:
+        students_list.append({
+            "name": person["name"],
+            "register_no": person["register_no"],
+            "roll_no": person["roll_no"],
+            "section": person["section"],
+            # "image_path": person["image_path"] # Optional: if you want to serve images later
+        })
+    return students_list
+
+
+# -----------------------------------------------------------
+# RUN SERVER
+# -----------------------------------------------------------
 if __name__ == "__main__":
+    print("🚀 Starting FastAPI server...")
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)

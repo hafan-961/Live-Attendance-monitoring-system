@@ -114,6 +114,7 @@ import Sidebar from "./Sidebar";
 import AttendanceChart from "./AttendanceChart";
 import RegisterStudent from "./RegisterStudent";
 import LiveAttendance from "./LiveAttendance";
+import StudentList from "./StudentList";
 
 function App() {
   const [page, setPage] = useState("dashboard");
@@ -131,10 +132,10 @@ function App() {
         })
         .catch((err) => console.error("API Error:", err));
     };
-    
+
     fetchData(); // fetch immediately
     const interval = setInterval(fetchData, 3000); // every 3 seconds
-    
+
     return () => clearInterval(interval);
   }, []);
 
@@ -142,7 +143,7 @@ function App() {
     <div className="flex">
       {/* Sidebar */}
       <Sidebar setPage={setPage} />
-      
+
       {/* Main Content */}
       <div className="flex-1 p-10 bg-gray-100 min-h-screen">
         {/* -------------------- Dashboard Page -------------------- */}
@@ -181,11 +182,10 @@ function App() {
                     <td className="p-3">{item.Time}</td>
                     <td className="p-3">
                       <span
-                        className={`px-2 py-1 text-sm rounded ${
-                          item.Status === "Present"
-                            ? "bg-green-200 text-green-800"
-                            : "bg-red-200 text-red-800"
-                        }`}
+                        className={`px-2 py-1 text-sm rounded ${item.Status === "Present"
+                          ? "bg-green-200 text-green-800"
+                          : "bg-red-200 text-red-800"
+                          }`}
                       >
                         {item.Status}
                       </span>
@@ -199,7 +199,10 @@ function App() {
 
         {/* -------------------- Students List Page -------------------- */}
         {page === "students" && (
-          <h1 className="text-3xl font-bold text-blue-600">Students List</h1>
+          <div>
+            <h1 className="text-3xl font-bold text-blue-600 mb-6">Students List</h1>
+            <StudentList />
+          </div>
         )}
 
         {/* -------------------- Settings Page -------------------- */}

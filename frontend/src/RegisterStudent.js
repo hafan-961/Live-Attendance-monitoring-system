@@ -1,34 +1,35 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 
-export default function RegisterStudent() {
+function RegisterStudent() {
   const imgRef = useRef(null);
   const canvasRef = useRef(null);
 
   const [cameraUrl, setCameraUrl] = useState("");
-  const [capturedImage, setCapturedImage] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState("");
+  const [capturedImage, setCapturedImage] = useState(null);
+
+  // Form fields
   const [name, setName] = useState("");
-  const [regNo, setRegNo] = useState("");
+  const [registerNo, setRegisterNo] = useState("");
   const [rollNo, setRollNo] = useState("");
   const [section, setSection] = useState("");
-  const [errorMsg, setErrorMsg] = useState("");
-  const [loading, setLoading] = useState(true);
 
-  // BACKEND URL - Change this if your backend is on a different address
   const BACKEND_URL = "http://127.0.0.1:8000";
 
   // ------------------ GET CAMERA URL (from backend) ------------------
   useEffect(() => {
-    async function loadCameraUrl() {
+    const fetchCameraUrl = async () => {
       try {
         console.log("Fetching camera URL from:", `${BACKEND_URL}/camera_url`);
         const res = await fetch(`${BACKEND_URL}/camera_url`);
         console.log("Response status:", res.status);
-        
+
         if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-        
+
         const data = await res.json();
         console.log("Camera URL response:", data);
-        
+
         if (data.image_url) {
           setCameraUrl(data.image_url);
           setErrorMsg("");
@@ -45,9 +46,9 @@ export default function RegisterStudent() {
         );
         setLoading(false);
       }
-    }
+    };
 
-    loadCameraUrl();
+    fetchCameraUrl();
   }, []);
 
   // ------------------ LIVE IMAGE STREAM ------------------
@@ -55,28 +56,39 @@ export default function RegisterStudent() {
     if (!cameraUrl || !imgRef.current) return;
 
     let interval;
+    let previousUrl = null;
+
     const update = async () => {
       try {
         const res = await fetch(cameraUrl);
         if (!res.ok) throw new Error("Camera feed error");
-        
+
         const data = await res.json();
-        
+
         if (data.content) {
           // Convert base64 to blob and create object URL
           const base64String = data.content;
           const byteCharacters = atob(base64String);
           const byteNumbers = new Array(byteCharacters.length);
-          
+
           for (let i = 0; i < byteCharacters.length; i++) {
             byteNumbers[i] = byteCharacters.charCodeAt(i);
           }
-          
+
           const byteArray = new Uint8Array(byteNumbers);
           const blob = new Blob([byteArray], { type: "image/jpeg" });
+
+          // Revoke previous URL
+          if (previousUrl) {
+            URL.revokeObjectURL(previousUrl);
+          }
+
           const url = URL.createObjectURL(blob);
-          
-          imgRef.current.src = url;
+          previousUrl = url;
+
+          if (imgRef.current) {
+            imgRef.current.src = url;
+          }
           setErrorMsg("");
         } else if (data.error) {
           setErrorMsg(`Camera error: ${data.error}`);
@@ -88,10 +100,13 @@ export default function RegisterStudent() {
     };
 
     update();
-    interval = setInterval(update, 100); // Update every 500ms
+    interval = setInterval(update, 100); // Update every 100ms
 
     return () => {
       clearInterval(interval);
+      if (previousUrl) {
+        URL.revokeObjectURL(previousUrl);
+      }
     };
   }, [cameraUrl]);
 
@@ -107,7 +122,6 @@ export default function RegisterStudent() {
     const img = imgRef.current;
 
     // Use naturalWidth and naturalHeight to get the actual image dimensions
-    // This ensures we capture the full image, not just the displayed size
     canvas.width = img.naturalWidth || img.width || 640;
     canvas.height = img.naturalHeight || img.height || 480;
 
@@ -125,7 +139,7 @@ export default function RegisterStudent() {
       return;
     }
 
-    if (!name || !regNo || !rollNo || !section) {
+    if (!name || !registerNo || !rollNo || !section) {
       alert("Please fill all student details!");
       return;
     }
@@ -135,7 +149,7 @@ export default function RegisterStudent() {
       const formData = new FormData();
 
       formData.append("name", name);
-      formData.append("reg_no", regNo);
+      formData.append("reg_no", registerNo);
       formData.append("roll_no", rollNo);
       formData.append("section", section);
       formData.append("image", blob, "face.jpg");
@@ -150,7 +164,7 @@ export default function RegisterStudent() {
       if (data.status === "success") {
         alert(data.message || "Registered successfully!");
         setName("");
-        setRegNo("");
+        setRegisterNo("");
         setRollNo("");
         setSection("");
         setCapturedImage("");
@@ -222,8 +236,8 @@ export default function RegisterStudent() {
 
       <input
         placeholder="Register Number"
-        value={regNo}
-        onChange={(e) => setRegNo(e.target.value)}
+        value={registerNo}
+        onChange={(e) => setRegisterNo(e.target.value)}
         style={{ padding: "8px", marginBottom: "10px", width: "200px" }}
       />
       <br />
@@ -261,3 +275,5 @@ export default function RegisterStudent() {
     </div>
   );
 }
+
+export default RegisterStudent;
