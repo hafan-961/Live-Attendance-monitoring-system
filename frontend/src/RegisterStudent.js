@@ -4,7 +4,7 @@ function RegisterStudent() {
   const imgRef = useRef(null);
   const canvasRef = useRef(null);
 
-  const [cameraUrl, setCameraUrl] = useState("");
+  const [cameraUrl, setCameraUrl] = useState(""); // This will now hold the backend proxy URL
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
   const [capturedImage, setCapturedImage] = useState(null);
@@ -15,105 +15,80 @@ function RegisterStudent() {
   const [rollNo, setRollNo] = useState("");
   const [section, setSection] = useState("");
 
-  const BACKEND_URL = "http://127.0.0.1:8000";
+  // Corrected BACKEND_URL to match your Flask server
+  const BACKEND_URL = "http://localhost:5000";
 
-  // ------------------ GET CAMERA URL (from backend) ------------------
+  // ------------------ Setup Camera Proxy URL ------------------
   useEffect(() => {
-    const fetchCameraUrl = async () => {
-      try {
-        console.log("Fetching camera URL from:", `${BACKEND_URL}/camera_url`);
-        const res = await fetch(`${BACKEND_URL}/camera_url`);
-        console.log("Response status:", res.status);
+    // This useEffect simply sets the URL for the proxy endpoint
+    // No actual fetch is needed here, just setting the state.
+    setCameraUrl(`${BACKEND_URL}/register_camera_frame`);
+    setLoading(false); // We are no longer "loading" a URL, just setting it.
+    console.log("✅ Camera proxy URL set for fetching frames.");
+  }, []); // Run once on mount
 
-        if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-
-        const data = await res.json();
-        console.log("Camera URL response:", data);
-
-        if (data.image_url) {
-          setCameraUrl(data.image_url);
-          setErrorMsg("");
-          setLoading(false);
-          console.log("✅ Camera URL loaded successfully");
-        } else {
-          setErrorMsg("Camera URL not found in backend response.");
-          setLoading(false);
-        }
-      } catch (err) {
-        console.error("Error:", err);
-        setErrorMsg(
-          `❌ Failed to connect to backend!\n\nMake sure:\n1. Backend is running on ${BACKEND_URL}\n2. Error: ${err.message}`
-        );
-        setLoading(false);
-      }
-    };
-
-    fetchCameraUrl();
-  }, []);
-
-  // ------------------ LIVE IMAGE STREAM ------------------
+  // ------------------ LIVE IMAGE STREAM (from backend proxy) ------------------
   useEffect(() => {
     if (!cameraUrl || !imgRef.current) return;
 
     let interval;
-    let previousUrl = null;
+    let previousObjectUrl = null; // To manage Blob URLs for memory efficiency
 
-    const update = async () => {
+    const updateFrame = async () => {
       try {
-        const res = await fetch(cameraUrl);
-        if (!res.ok) throw new Error("Camera feed error");
+        const res = await fetch(cameraUrl); // Fetch from the backend proxy endpoint
+        if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
 
         const data = await res.json();
 
         if (data.content) {
-          // Convert base64 to blob and create object URL
           const base64String = data.content;
+          // Convert base64 to Blob and create Object URL
           const byteCharacters = atob(base64String);
           const byteNumbers = new Array(byteCharacters.length);
-
           for (let i = 0; i < byteCharacters.length; i++) {
             byteNumbers[i] = byteCharacters.charCodeAt(i);
           }
-
           const byteArray = new Uint8Array(byteNumbers);
           const blob = new Blob([byteArray], { type: "image/jpeg" });
 
-          // Revoke previous URL
-          if (previousUrl) {
-            URL.revokeObjectURL(previousUrl);
+          // Revoke previous Object URL to prevent memory leaks
+          if (previousObjectUrl) {
+            URL.revokeObjectURL(previousObjectUrl);
           }
 
-          const url = URL.createObjectURL(blob);
-          previousUrl = url;
+          const newObjectUrl = URL.createObjectURL(blob);
+          previousObjectUrl = newObjectUrl;
 
           if (imgRef.current) {
-            imgRef.current.src = url;
+            imgRef.current.src = newObjectUrl;
           }
-          setErrorMsg("");
+          setErrorMsg(""); // Clear error if successful
         } else if (data.error) {
-          setErrorMsg(`Camera error: ${data.error}`);
+          setErrorMsg(`Backend camera proxy error: ${data.error}`);
         }
       } catch (err) {
-        console.error("Camera update error:", err);
+        console.error("Camera frame update error:", err);
         setErrorMsg(`Camera feed error: ${err.message}`);
       }
     };
 
-    update();
-    interval = setInterval(update, 100); // Update every 100ms
+    // Start fetching frames repeatedly
+    updateFrame(); // Fetch immediately
+    interval = setInterval(updateFrame, 100); // Update every 100ms (10 FPS)
 
     return () => {
-      clearInterval(interval);
-      if (previousUrl) {
-        URL.revokeObjectURL(previousUrl);
+      clearInterval(interval); // Clear interval on component unmount
+      if (previousObjectUrl) {
+        URL.revokeObjectURL(previousObjectUrl); // Revoke last object URL
       }
     };
-  }, [cameraUrl]);
+  }, [cameraUrl]); // Re-run if cameraUrl changes
 
   // ------------------ CAPTURE IMAGE ------------------
   const captureFace = () => {
-    if (!imgRef.current || !imgRef.current.src) {
-      alert("Camera feed not ready. Please wait...");
+    if (!imgRef.current || !imgRef.current.src || imgRef.current.src.startsWith('data:image/gif')) { // Check for actual image data
+      alert("Camera feed not ready or no image loaded. Please wait...");
       return;
     }
 
@@ -121,7 +96,11 @@ function RegisterStudent() {
     const ctx = canvas.getContext("2d");
     const img = imgRef.current;
 
-    // Use naturalWidth and naturalHeight to get the actual image dimensions
+    if (!img.complete) {
+      alert("Image not fully loaded. Please wait a moment.");
+      return;
+    }
+
     canvas.width = img.naturalWidth || img.width || 640;
     canvas.height = img.naturalHeight || img.height || 480;
 
@@ -145,14 +124,15 @@ function RegisterStudent() {
     }
 
     try {
-      const blob = await (await fetch(capturedImage)).blob();
-      const formData = new FormData();
+      const response = await fetch(capturedImage);
+      const blob = await response.blob();
 
+      const formData = new FormData();
       formData.append("name", name);
       formData.append("reg_no", registerNo);
       formData.append("roll_no", rollNo);
       formData.append("section", section);
-      formData.append("image", blob, "face.jpg");
+      formData.append("image", blob, `${registerNo}.jpg`);
 
       const res = await fetch(`${BACKEND_URL}/register`, {
         method: "POST",
@@ -167,11 +147,12 @@ function RegisterStudent() {
         setRegisterNo("");
         setRollNo("");
         setSection("");
-        setCapturedImage("");
+        setCapturedImage(null);
       } else {
-        alert(data.error || "Registration failed.");
+        alert(data.message || data.error || "Registration failed.");
       }
     } catch (err) {
+      console.error("Registration error:", err);
       alert(`Registration error: ${err.message}`);
     }
   };
@@ -187,9 +168,10 @@ function RegisterStudent() {
       )}
       {loading && <p style={{ color: "orange" }}>Loading camera...</p>}
 
-      {/* LIVE CAMERA FEED */}
+      {/* LIVE CAMERA FEED - src will be updated by useEffect */}
       <img
         ref={imgRef}
+        src="" // Start with empty src, useEffect will update it with blob URLs
         alt="Live Camera"
         width={640}
         height={480}
@@ -203,6 +185,7 @@ function RegisterStudent() {
 
       <button
         onClick={captureFace}
+        disabled={!cameraUrl || loading}
         style={{
           padding: "10px 20px",
           background: "#4CAF50",
@@ -210,6 +193,7 @@ function RegisterStudent() {
           border: "none",
           borderRadius: "5px",
           cursor: "pointer",
+          opacity: (!cameraUrl || loading) ? 0.5 : 1,
         }}
       >
         Capture Face
@@ -260,6 +244,7 @@ function RegisterStudent() {
 
       <button
         onClick={handleSubmit}
+        disabled={!capturedImage || !name || !registerNo || !rollNo || !section}
         style={{
           background: "blue",
           color: "white",
@@ -268,6 +253,7 @@ function RegisterStudent() {
           borderRadius: "5px",
           cursor: "pointer",
           marginTop: "10px",
+          opacity: (!capturedImage || !name || !registerNo || !rollNo || !section) ? 0.5 : 1,
         }}
       >
         Submit

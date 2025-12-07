@@ -1,268 +1,282 @@
-from fastapi import FastAPI, UploadFile, File, Form
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-
-import uvicorn
 import cv2
-import numpy as np
-import base64
-import os
 import pickle
-import requests
+import numpy as np
+from insightface.app import FaceAnalysis
+import time
+import os
+import json
 from datetime import datetime
+from flask import Flask, Response, jsonify, request
+from flask_cors import CORS
+import threading
+import queue
+import base64 # Added for base64 encoding frames
 
-# ---- ALWAYS LOAD APP FIRST (prevents app-not-found error) ----
-app = FastAPI()
+print("🔹 Starting Live Attendance Monitoring Backend...")
 
-# ---- CORS ----
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# --- Configuration ---
+CAMERA_URL = "http://10.216.185.30:8080/video" # Your camera URL
+REGISTERED_FACES_DIR = "registered_faces" # Must match generate_embeddings.py
+EMBEDDINGS_FILE = "embeddings.pkl"
+ATTENDANCE_LOG_FILE = "attendance_log.json"
+RECOGNITION_THRESHOLD = 0.35 # Cosine distance threshold (lower means more similar)
+ATTENDANCE_COOLDOWN_SECONDS = 10 # Mark attendance for a student only once every X seconds
+FLASK_HOST = '0.0.0.0'
+FLASK_PORT = 5000
 
-# ---- Load InsightFace safely ----
+# --- Global Variables for Attendance and Video Stream ---
+attendance_records = {} # {reg_no: {'status': 'Present', 'timestamp': '...'}}
+last_marked_time = {} # {reg_no: timestamp_of_last_mark}
+frame_queue = queue.Queue(maxsize=1) # Queue to hold the latest PROCESSED frame for LiveAttendance.js
+latest_raw_frame = None # Stores the latest RAW frame for RegisterStudent.js
+raw_frame_lock = threading.Lock() # Lock for accessing latest_raw_frame
+
+# --- InsightFace Initialization ---
 try:
-    from insightface.app import FaceAnalysis
-    face_app = FaceAnalysis(name="buffalo_l", providers=["CPUExecutionProvider"])
-    face_app.prepare(ctx_id=0, det_size=(640, 640))
-    insight_loaded = True
-    print("✅ InsightFace loaded successfully")
+    app = FaceAnalysis(name='buffalo_l', providers=['CUDAExecutionProvider', 'CPUExecutionProvider'])
+    app.prepare(ctx_id=0, det_size=(640, 640))
+    print("✅ InsightFace model loaded successfully.")
 except Exception as e:
-    print("❌ InsightFace failed to load:", e)
-    insight_loaded = False
+    print(f"❌ Error initializing InsightFace: {e}")
+    print("Please ensure InsightFace is installed and models are downloaded.")
+    exit()
 
-# ---- Storage ----
-REGISTERED_FACES_DIR = "registered_faces"
-os.makedirs(REGISTERED_FACES_DIR, exist_ok=True)
+# --- Embeddings Management ---
+registered_embeddings = {}
+registered_reg_nos = []
+registered_embedding_vectors = np.array([])
+embeddings_lock = threading.Lock() # To prevent race conditions when updating embeddings
 
-EMBEDDINGS_PATH = "embeddings.pkl"
+def load_registered_embeddings():
+    global registered_embeddings, registered_reg_nos, registered_embedding_vectors
+    with embeddings_lock:
+        if os.path.exists(EMBEDDINGS_FILE):
+            try:
+                with open(EMBEDDINGS_FILE, "rb") as f:
+                    loaded_data = pickle.load(f)
+                if isinstance(loaded_data, dict):
+                    registered_embeddings = loaded_data
+                    registered_reg_nos = list(registered_embeddings.keys())
+                    registered_embedding_vectors = np.array(list(registered_embeddings.values()))
+                    print(f"✅ Loaded {len(registered_embeddings)} registered student embeddings.")
+                else:
+                    print(f"❌ Error: '{EMBEDDINGS_FILE}' contains data of type {type(loaded_data)}, expected dict.")
+                    registered_embeddings = {}
+                    registered_reg_nos = []
+                    registered_embedding_vectors = np.array([])
+            except Exception as e:
+                print(f"❌ Error loading '{EMBEDDINGS_FILE}': {e}")
+                registered_embeddings = {}
+                registered_reg_nos = []
+                registered_embedding_vectors = np.array([])
+        else:
+            print(f"❌ '{EMBEDDINGS_FILE}' not found. Recognition will not work until embeddings are generated.")
+            registered_embeddings = {}
+            registered_reg_nos = []
+            registered_embedding_vectors = np.array([])
 
-try:
-    known_faces = pickle.load(open(EMBEDDINGS_PATH, "rb"))
-    if not isinstance(known_faces, list):
-        known_faces = []
-except:
-    known_faces = []
+# Load embeddings at startup
+load_registered_embeddings()
 
-print(f"✅ Loaded {len(known_faces)} known faces")
+# --- Attendance Logging Functions ---
+def load_attendance_log():
+    global attendance_records
+    if os.path.exists(ATTENDANCE_LOG_FILE):
+        with open(ATTENDANCE_LOG_FILE, 'r') as f:
+            attendance_records = json.load(f)
+        print(f"✅ Loaded existing attendance log from {ATTENDANCE_LOG_FILE}")
+    else:
+        print(f"ℹ️ No existing attendance log found at {ATTENDANCE_LOG_FILE}. Starting fresh.")
 
-attendance_records = []
+def save_attendance_log():
+    with open(ATTENDANCE_LOG_FILE, 'w') as f:
+        json.dump(attendance_records, f, indent=4)
 
-# ---- Camera ----
-CAMERA_IP = "http://10.168.33.206:8080/shot.jpg"
+# --- Camera Processing Thread ---
+def camera_processing_thread():
+    global attendance_records, last_marked_time, latest_raw_frame
 
+    cap = cv2.VideoCapture(CAMERA_URL)
+    if not cap.isOpened():
+        print(f"❌ [Camera Thread] Could not connect to camera at {CAMERA_URL}!")
+        return
 
-# -----------------------------------------------------------
-# ENDPOINT: Check camera URL
-# -----------------------------------------------------------
-@app.get("/camera_url")
-def camera_url():
-    return {
-        "video_url": CAMERA_IP,
-        "image_url": "http://127.0.0.1:8000/camera_feed"
-    }
+    print("🟢 [Camera Thread] Starting live attendance monitoring.")
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            print("❌ [Camera Thread] Could not read frame from camera. Attempting to reconnect...")
+            cap.release()
+            cap = cv2.VideoCapture(CAMERA_URL)
+            if not cap.isOpened():
+                print("❌ [Camera Thread] Failed to reconnect to camera. Exiting camera thread.")
+                break
+            time.sleep(1)
+            continue
 
+        # Store the raw frame for the registration endpoint
+        with raw_frame_lock:
+            latest_raw_frame = frame.copy() # Store a copy
 
-# -----------------------------------------------------------
-# ENDPOINT: Camera Feed
-# -----------------------------------------------------------
-@app.get("/camera_feed")
-def camera_feed():
+        display_frame = frame.copy()
+        current_time = time.time()
+
+        faces = app.get(frame)
+
+        if faces:
+            for face in faces:
+                bbox = face.bbox.astype(int)
+                current_embedding = face.embedding
+
+                with embeddings_lock: # Acquire lock before accessing shared embeddings
+                    if registered_embedding_vectors.size > 0:
+                        similarities = np.dot(registered_embedding_vectors, current_embedding)
+                        best_match_idx = np.argmax(similarities)
+                        best_similarity = similarities[best_match_idx]
+                        best_distance = 1 - best_similarity
+
+                        matched_reg_no = registered_reg_nos[best_match_idx]
+
+                        if best_distance < RECOGNITION_THRESHOLD:
+                            if matched_reg_no not in last_marked_time or \
+                               (current_time - last_marked_time[matched_reg_no]) > ATTENDANCE_COOLDOWN_SECONDS:
+
+                                attendance_records[matched_reg_no] = {
+                                    'status': 'Present',
+                                    'timestamp': datetime.now().isoformat()
+                                }
+                                last_marked_time[matched_reg_no] = current_time
+                                save_attendance_log()
+                                print(f"✅ Attendance marked for {matched_reg_no} at {datetime.now().strftime('%H:%M:%S')}")
+
+                            cv2.rectangle(display_frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (0, 255, 0), 2)
+                            cv2.putText(display_frame, f"{matched_reg_no} ({best_similarity:.2f})", (bbox[0], bbox[1] - 10),
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2, cv2.LINE_AA)
+                        else:
+                            cv2.rectangle(display_frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (0, 0, 255), 2)
+                            cv2.putText(display_frame, "Unknown", (bbox[0], bbox[1] - 10),
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2, cv2.LINE_AA)
+                    else:
+                        cv2.rectangle(display_frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (255, 0, 0), 2)
+                        cv2.putText(display_frame, "No Registered Faces", (bbox[0], bbox[1] - 10),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2, cv2.LINE_AA)
+        else:
+            cv2.putText(display_frame, "No Face Detected", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA)
+
+        try:
+            frame_queue.put_nowait(display_frame)
+        except queue.Full:
+            pass
+
+    cap.release()
+    cv2.destroyAllWindows()
+    save_attendance_log()
+    print("🔴 [Camera Thread] Camera processing thread terminated.")
+
+# --- Flask Application Setup ---
+app_flask = Flask(__name__)
+CORS(app_flask)
+
+def generate_frames():
+    while True:
+        try:
+            frame = frame_queue.get()
+            ret, buffer = cv2.imencode('.jpg', frame)
+            if not ret:
+                continue
+            frame_bytes = buffer.tobytes()
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+        except Exception as e:
+            print(f"❌ Error in video frame generation: {e}")
+            time.sleep(0.1)
+
+@app_flask.route('/video_feed')
+def video_feed():
+    return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@app_flask.route('/attendance_data')
+def get_attendance_data():
+    return jsonify(attendance_records.copy())
+
+# --- NEW: Endpoint for RegisterStudent.js to get a single camera frame (proxied) ---
+@app_flask.route('/register_camera_frame')
+def get_register_camera_frame():
+    with raw_frame_lock:
+        if latest_raw_frame is None:
+            return jsonify({"error": "Camera not ready or no frame captured yet"}), 503
+
+        # Encode frame as JPEG
+        ret, buffer = cv2.imencode('.jpg', latest_raw_frame)
+        if not ret:
+            return jsonify({"error": "Could not encode frame to JPEG"}), 500
+
+        frame_base64 = base64.b64encode(buffer).decode('utf-8')
+        return jsonify({"content": frame_base64})
+
+# --- Endpoint for RegisterStudent.js to register students ---
+@app_flask.route('/register', methods=['POST'])
+def register_student():
+    if 'image' not in request.files:
+        return jsonify({"status": "error", "message": "No image file provided"}), 400
+
+    image_file = request.files['image']
+    name = request.form.get('name')
+    reg_no = request.form.get('reg_no')
+    roll_no = request.form.get('roll_no')
+    section = request.form.get('section')
+
+    if not all([name, reg_no, roll_no, section, image_file]):
+        return jsonify({"status": "error", "message": "Missing required student details"}), 400
+
+    safe_reg_no = "".join(c for c in reg_no if c.isalnum() or c in ('-', '_')).strip()
+    if not safe_reg_no:
+        return jsonify({"status": "error", "message": "Invalid Register Number for filename"}), 400
+
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    filename = f"{safe_reg_no}_{timestamp}.jpg"
+    save_path = os.path.join(REGISTERED_FACES_DIR, filename)
+
     try:
-        print("📷 Fetching camera feed...")
-        res = requests.get(CAMERA_IP, timeout=5)
-        
-        if res.status_code != 200:
-            print(f"❌ Camera returned status {res.status_code}")
-            return {"error": f"Camera returned status {res.status_code}"}
-        
-        nparr = np.frombuffer(res.content, np.uint8)
-        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        
-        if frame is None:
-            print("❌ Failed to decode frame")
-            return {"error": "Failed to decode frame"}
-        
-        frame = cv2.resize(frame, (640, 480))
-        _, buffer = cv2.imencode(".jpg", frame)
-        
-        print("✅ Camera feed sent successfully")
+        image_file.save(save_path)
+        print(f"✅ Saved new registration image: {save_path}")
 
-        return {
-            "content": base64.b64encode(buffer).decode(),
-            "type": "image/jpeg"
-        }
+        img = cv2.imread(save_path)
+        if img is None:
+            return jsonify({"status": "error", "message": "Failed to read saved image"}), 500
 
-    except requests.exceptions.Timeout:
-        print("❌ Camera connection timeout")
-        return {"error": "Camera connection timeout"}
-    except requests.exceptions.ConnectionError:
-        print(f"❌ Cannot connect to camera at {CAMERA_IP}")
-        return {"error": f"Cannot connect to camera at {CAMERA_IP}"}
-    except Exception as e:
-        print(f"❌ Camera error: {str(e)}")
-        return {"error": str(e)}
+        faces = app.get(img)
+        if faces:
+            new_embedding = faces[0].embedding
+            with embeddings_lock:
+                registered_embeddings[reg_no] = new_embedding
+                global registered_reg_nos, registered_embedding_vectors
+                registered_reg_nos = list(registered_embeddings.keys())
+                registered_embedding_vectors = np.array(list(registered_embeddings.values()))
 
-
-# -----------------------------------------------------------
-# ENDPOINT: Register Student
-# -----------------------------------------------------------
-@app.post("/register")
-async def register_student(
-    name: str = Form(...),
-    reg_no: str = Form(...),
-    roll_no: str = Form(...),
-    section: str = Form(...),
-    image: UploadFile = File(...)
-):
-    try:
-        if not insight_loaded:
-            return {"error": "InsightFace failed to load"}
-
-        img_bytes = await image.read()
-        nparr = np.frombuffer(img_bytes, np.uint8)
-        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-
-        if frame is None:
-            return {"error": "Invalid image format"}
-
-        faces = face_app.get(frame)
-        if len(faces) == 0:
-            return {"error": "No face detected"}
-
-        emb = faces[0].embedding.tolist()
-
-        filename = f"{reg_no}_{name}.jpg"
-        path = os.path.join(REGISTERED_FACES_DIR, filename)
-        cv2.imwrite(path, frame)
-
-        student = {
-            "name": name,
-            "register_no": reg_no,
-            "roll_no": roll_no,
-            "section": section,
-            "embedding": emb,
-            "image_path": path
-        }
-
-        known_faces.append(student)
-        pickle.dump(known_faces, open(EMBEDDINGS_PATH, "wb"))
-
-        print(f"✅ Student registered: {name}")
-        return {"status": "success", "message": f"Student {name} registered successfully!"}
+                with open(EMBEDDINGS_FILE, "wb") as f:
+                    pickle.dump(registered_embeddings, f)
+                print(f"✅ Updated embeddings.pkl with new student {reg_no}.")
+            return jsonify({"status": "success", "message": f"Student {name} ({reg_no}) registered and embeddings updated!"})
+        else:
+            os.remove(save_path)
+            return jsonify({"status": "error", "message": "No face detected in the uploaded image. Registration failed."}), 400
 
     except Exception as e:
-        print(f"❌ Registration error: {str(e)}")
-        return {"error": str(e)}
+        print(f"❌ Error during registration: {e}")
+        return jsonify({"status": "error", "message": f"Server error during registration: {e}"}), 500
 
+@app_flask.route('/')
+def index():
+    return "Live Attendance Backend is running. Access /video_feed for stream, /attendance_data for JSON, /register_camera_frame for registration camera, and /register for student registration."
 
-# -----------------------------------------------------------
-# ENDPOINT: Start Attendance
-# -----------------------------------------------------------
-@app.post("/start_attendance")
-def start_attendance():
+# --- Main Execution ---
+if __name__ == '__main__':
+    load_attendance_log()
 
-    if not insight_loaded:
-        return {"error": "InsightFace failed to load"}
+    camera_thread = threading.Thread(target=camera_processing_thread, daemon=True)
+    camera_thread.start()
+    print(f"✅ Camera processing thread started.")
 
-    try:
-        print("📷 Starting attendance capture...")
-        res = requests.get(CAMERA_IP, timeout=5)
-        
-        if res.status_code != 200:
-            return {"error": "Failed to capture frame from camera"}
-        
-        nparr = np.frombuffer(res.content, np.uint8)
-        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-
-        if frame is None:
-            return {"error": "Failed to decode frame"}
-
-        faces = face_app.get(frame)
-        if len(faces) == 0:
-            # DEBUG: Save image to check why face is not detected
-            cv2.imwrite("debug_no_face.jpg", frame)
-            print("❌ No face detected. Saved frame to 'debug_no_face.jpg'")
-            return {"status": "no_face", "detected": [], "error": "No face detected"}
-
-        detected = []
-        for face in faces:
-            emb = face.embedding
-            best_match = None
-            best_score = 999
-
-            for person in known_faces:
-                db = np.array(person["embedding"])
-                score = np.linalg.norm(emb - db)
-
-                if score < best_score:
-                    best_score = score
-                    best_match = person
-
-            if best_score < 1.0 and best_match:
-                record = {
-                    "Register_No": best_match["register_no"],
-                    "Name": best_match["name"],
-                    "Roll_No": best_match["roll_no"],
-                    "Section": best_match["section"],
-                    "Time": datetime.now().strftime("%H:%M:%S"),
-                    "Status": "Present"
-                }
-    
-                # Avoid duplicate records
-                duplicate = False
-                for existing in attendance_records:
-                    if existing["Register_No"] == record["Register_No"] and existing["Time"] == record["Time"]:
-                        duplicate = True
-                        break
-
-                if not duplicate:
-                    attendance_records.append(record)
-                    detected.append(record)
-                print(f"✅ Match found: {best_match['name']} (Score: {best_score:.2f})")
-            else:
-                print(f"❌ Unknown face. Best score: {best_score:.2f} (Threshold: 1.0)")
-
-        print(f"✅ Detected {len(detected)} student(s)")
-        return {"status": "success", "detected": detected}
-
-    except Exception as e:
-        print(f"❌ Attendance error: {str(e)}")
-        return {"error": str(e)}
-
-
-# -----------------------------------------------------------
-# GET ATTENDANCE
-# -----------------------------------------------------------
-@app.get("/attendance")
-def get_attendance():
-    return attendance_records
-
-
-# -----------------------------------------------------------
-# GET REGISTERED STUDENTS
-# -----------------------------------------------------------
-@app.get("/students")
-def get_students():
-    # Return list of students without embeddings (too large)
-    students_list = []
-    for person in known_faces:
-        students_list.append({
-            "name": person["name"],
-            "register_no": person["register_no"],
-            "roll_no": person["roll_no"],
-            "section": person["section"],
-            # "image_path": person["image_path"] # Optional: if you want to serve images later
-        })
-    return students_list
-
-
-# -----------------------------------------------------------
-# RUN SERVER
-# -----------------------------------------------------------
-if __name__ == "__main__":
-    print("🚀 Starting FastAPI server...")
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+    print(f"🌐 Flask server starting on http://{FLASK_HOST}:{FLASK_PORT}")
+    app_flask.run(host=FLASK_HOST, port=FLASK_PORT, debug=False, threaded=True)
