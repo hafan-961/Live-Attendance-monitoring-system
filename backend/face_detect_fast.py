@@ -4,7 +4,7 @@ from insightface.app import FaceAnalysis
 app = FaceAnalysis()
 app.prepare(ctx_id=0, det_size=(320, 320))
 
-url = "http://10.212.93.162:8080/video"
+url = "http://10.172.140.210:8080/video"
 cap = cv2.VideoCapture(url)
 
 last_faces = []          # remember last detection
