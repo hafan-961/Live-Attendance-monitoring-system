@@ -1195,7 +1195,7 @@ import base64
 print("🔹 Starting Live Attendance Monitoring Backend...")
 
 # --- Configuration ---
-CAMERA_URL = "http://10.172.140.210:8080/video"
+CAMERA_URL = "http://10.174.115.216:8080/video"
 REGISTERED_FACES_DIR = "registered_faces"
 EMBEDDINGS_FILE = "embeddings.pkl"
 ATTENDANCE_LOG_FILE = "attendance_log.json"
