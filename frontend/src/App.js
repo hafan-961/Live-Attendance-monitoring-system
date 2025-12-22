@@ -1,10 +1,11 @@
+
 // import React, { useEffect, useState } from "react";
 // import axios from "axios";
 // import Sidebar from "./Sidebar";
 // import AttendanceChart from "./AttendanceChart";
 // import RegisterStudent from "./RegisterStudent";
 // import LiveAttendance from "./LiveAttendance";
-
+// import StudentList from "./StudentList";
 
 // function App() {
 //   const [page, setPage] = useState("dashboard");
@@ -14,43 +15,42 @@
 //   useEffect(() => {
 //     const fetchData = () => {
 //       axios
-//         .get("http://127.0.0.1:8000/attendance")
-//         .then((res) => setAttendance(res.data))
+//         .get("http://127.0.0.1:5000/attendance_data")
+//         .then((res) => {
+//           // Handle both array and object responses
+//           const data = Array.isArray(res.data) ? res.data : [];
+//           setAttendance(data);
+//         })
 //         .catch((err) => console.error("API Error:", err));
 //     };
 
 //     fetchData(); // fetch immediately
 //     const interval = setInterval(fetchData, 3000); // every 3 seconds
+
 //     return () => clearInterval(interval);
 //   }, []);
 
 //   return (
-//     <div className="flex">
+//     <div className="app-layout">
 //       {/* Sidebar */}
 //       <Sidebar setPage={setPage} />
 
 //       {/* Main Content */}
-//       <div className="flex-1 p-10 bg-gray-100 min-h-screen">
-
+//       <div className="flex-1 p-10 min-h-screen main-content-area">
 //         {/* -------------------- Dashboard Page -------------------- */}
 //         {page === "dashboard" && (
 //           <div>
-//             <h1 className="text-3xl font-bold text-blue-600 mb-6">
-//               Dashboard
-//             </h1>
-
+//             <h1 className="text-3xl font-bold text-blue-600 mb-6">Dashboard</h1>
 //             <div className="text-lg mb-4">
 //               Total Attendance Records: <strong>{attendance.length}</strong>
 //             </div>
-
 //             {/* Attendance Chart */}
 //             <AttendanceChart attendance={attendance} />
 //           </div>
 //         )}
+
 //         {page === "register" && <RegisterStudent />}
 //         {page === "live" && <LiveAttendance />}
-
-
 
 //         {/* -------------------- Attendance Records Page -------------------- */}
 //         {page === "attendance" && (
@@ -58,7 +58,6 @@
 //             <h1 className="text-3xl font-bold text-blue-600 mb-6">
 //               Attendance Records
 //             </h1>
-
 //             <table className="w-full bg-white shadow rounded-lg">
 //               <thead>
 //                 <tr className="bg-gray-200">
@@ -67,7 +66,6 @@
 //                   <th className="p-3 text-left">Status</th>
 //                 </tr>
 //               </thead>
-
 //               <tbody>
 //                 {attendance.map((item, index) => (
 //                   <tr key={index} className="border-t">
@@ -75,11 +73,10 @@
 //                     <td className="p-3">{item.Time}</td>
 //                     <td className="p-3">
 //                       <span
-//                         className={`px-2 py-1 text-sm rounded ${
-//                           item.Status === "Present"
-//                             ? "bg-green-200 text-green-800"
-//                             : "bg-red-200 text-red-800"
-//                         }`}
+//                         className={`px-2 py-1 text-sm rounded ${item.Status === "Present"
+//                           ? "bg-green-200 text-green-800"
+//                           : "bg-red-200 text-red-800"
+//                           }`}
 //                       >
 //                         {item.Status}
 //                       </span>
@@ -93,7 +90,10 @@
 
 //         {/* -------------------- Students List Page -------------------- */}
 //         {page === "students" && (
-//           <h1 className="text-3xl font-bold text-blue-600">Students List</h1>
+//           <div>
+//             <h1 className="text-3xl font-bold text-blue-600 mb-6">Students List</h1>
+//             <StudentList />
+//           </div>
 //         )}
 
 //         {/* -------------------- Settings Page -------------------- */}
@@ -120,32 +120,35 @@ function App() {
   const [page, setPage] = useState("dashboard");
   const [attendance, setAttendance] = useState([]);
 
+  // Flask Backend URL (Changed from FastAPI's 8000 to Flask's 5000)
+  const FLASK_BACKEND_URL = "http://127.0.0.1:5000"; 
+
   // Auto-refresh attendance data every 3 seconds
   useEffect(() => {
     const fetchData = () => {
       axios
-        .get("http://127.0.0.1:8000/attendance")
+        .get(`${FLASK_BACKEND_URL}/attendance_data`) // Corrected endpoint for Flask
         .then((res) => {
-          // Handle both array and object responses
+          // Handle both array and object responses for robustness
           const data = Array.isArray(res.data) ? res.data : [];
           setAttendance(data);
         })
-        .catch((err) => console.error("API Error:", err));
+        .catch((err) => console.error("API Error fetching attendance:", err));
     };
 
     fetchData(); // fetch immediately
     const interval = setInterval(fetchData, 3000); // every 3 seconds
 
     return () => clearInterval(interval);
-  }, []);
+  }, []); // Empty dependency array means this runs once on mount
 
   return (
-    <div className="flex">
+    <div className="app-layout"> {/* Custom class for overall layout */}
       {/* Sidebar */}
       <Sidebar setPage={setPage} />
 
-      {/* Main Content */}
-      <div className="flex-1 p-10 bg-gray-100 min-h-screen">
+      {/* Main Content Area */}
+      <div className="main-content-area"> {/* Custom class for main content */}
         {/* -------------------- Dashboard Page -------------------- */}
         {page === "dashboard" && (
           <div>

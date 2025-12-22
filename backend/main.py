@@ -9,906 +9,33 @@
 # from flask import Flask, Response, jsonify, request
 # from flask_cors import CORS
 # import threading
-# import queue
-# import base64 # Added for base64 encoding frames
-
-# print("🔹 Starting Live Attendance Monitoring Backend...")
-
-# # --- Configuration ---
-# CAMERA_URL = "http://10.172.140.210:8080/video" # Your camera URL
-# REGISTERED_FACES_DIR = "registered_faces" # Must match generate_embeddings.py
-# EMBEDDINGS_FILE = "embeddings.pkl"
-# ATTENDANCE_LOG_FILE = "attendance_log.json"
-# RECOGNITION_THRESHOLD = 0.35 # Cosine distance threshold (lower means more similar)
-# ATTENDANCE_COOLDOWN_SECONDS = 10 # Mark attendance for a student only once every X seconds
-# FLASK_HOST = '0.0.0.0'
-# FLASK_PORT = 5000
-
-# # --- Global Variables for Attendance and Video Stream ---
-# attendance_records = {} # {reg_no: {'status': 'Present', 'timestamp': '...'}}
-# last_marked_time = {} # {reg_no: timestamp_of_last_mark}
-# frame_queue = queue.Queue(maxsize=1) # Queue to hold the latest PROCESSED frame for LiveAttendance.js
-# latest_raw_frame = None # Stores the latest RAW frame for RegisterStudent.js
-# raw_frame_lock = threading.Lock() # Lock for accessing latest_raw_frame
-
-# # --- InsightFace Initialization ---
-# try:
-#     app = FaceAnalysis(name='buffalo_l', providers=['CUDAExecutionProvider', 'CPUExecutionProvider'])
-#     app.prepare(ctx_id=0, det_size=(640, 640))
-#     print("✅ InsightFace model loaded successfully.")
-# except Exception as e:
-#     print(f"❌ Error initializing InsightFace: {e}")
-#     print("Please ensure InsightFace is installed and models are downloaded.")
-#     exit()
-
-# # --- Embeddings Management ---
-# registered_embeddings = {}
-# registered_reg_nos = []
-# registered_embedding_vectors = np.array([])
-# embeddings_lock = threading.Lock() # To prevent race conditions when updating embeddings
-
-# def load_registered_embeddings():
-#     global registered_embeddings, registered_reg_nos, registered_embedding_vectors
-#     with embeddings_lock:
-#         if os.path.exists(EMBEDDINGS_FILE):
-#             try:
-#                 with open(EMBEDDINGS_FILE, "rb") as f:
-#                     loaded_data = pickle.load(f)
-#                 if isinstance(loaded_data, dict):
-#                     registered_embeddings = loaded_data
-#                     registered_reg_nos = list(registered_embeddings.keys())
-#                     registered_embedding_vectors = np.array(list(registered_embeddings.values()))
-#                     print(f"✅ Loaded {len(registered_embeddings)} registered student embeddings.")
-#                 else:
-#                     print(f"❌ Error: '{EMBEDDINGS_FILE}' contains data of type {type(loaded_data)}, expected dict.")
-#                     registered_embeddings = {}
-#                     registered_reg_nos = []
-#                     registered_embedding_vectors = np.array([])
-#             except Exception as e:
-#                 print(f"❌ Error loading '{EMBEDDINGS_FILE}': {e}")
-#                 registered_embeddings = {}
-#                 registered_reg_nos = []
-#                 registered_embedding_vectors = np.array([])
-#         else:
-#             print(f"❌ '{EMBEDDINGS_FILE}' not found. Recognition will not work until embeddings are generated.")
-#             registered_embeddings = {}
-#             registered_reg_nos = []
-#             registered_embedding_vectors = np.array([])
-
-# # Load embeddings at startup
-# load_registered_embeddings()
-
-# # --- Attendance Logging Functions ---
-# def load_attendance_log():
-#     global attendance_records
-#     if os.path.exists(ATTENDANCE_LOG_FILE):
-#         with open(ATTENDANCE_LOG_FILE, 'r') as f:
-#             attendance_records = json.load(f)
-#         print(f"✅ Loaded existing attendance log from {ATTENDANCE_LOG_FILE}")
-#     else:
-#         print(f"ℹ️ No existing attendance log found at {ATTENDANCE_LOG_FILE}. Starting fresh.")
-
-# def save_attendance_log():
-#     with open(ATTENDANCE_LOG_FILE, 'w') as f:
-#         json.dump(attendance_records, f, indent=4)
-
-# # --- Camera Processing Thread ---
-# def camera_processing_thread():
-#     global attendance_records, last_marked_time, latest_raw_frame
-
-#     cap = cv2.VideoCapture(CAMERA_URL)
-#     if not cap.isOpened():
-#         print(f"❌ [Camera Thread] Could not connect to camera at {CAMERA_URL}!")
-#         return
-
-#     print("🟢 [Camera Thread] Starting live attendance monitoring.")
-#     while True:
-#         ret, frame = cap.read()
-#         if not ret:
-#             print("❌ [Camera Thread] Could not read frame from camera. Attempting to reconnect...")
-#             cap.release()
-#             cap = cv2.VideoCapture(CAMERA_URL)
-#             if not cap.isOpened():
-#                 print("❌ [Camera Thread] Failed to reconnect to camera. Exiting camera thread.")
-#                 break
-#             time.sleep(1)
-#             continue
-
-#         # Store the raw frame for the registration endpoint
-#         with raw_frame_lock:
-#             latest_raw_frame = frame.copy() # Store a copy
-
-#         display_frame = frame.copy()
-#         current_time = time.time()
-
-#         faces = app.get(frame)
-
-#         if faces:
-#             for face in faces:
-#                 bbox = face.bbox.astype(int)
-#                 current_embedding = face.embedding
-
-#                 with embeddings_lock: # Acquire lock before accessing shared embeddings
-#                     if registered_embedding_vectors.size > 0:
-#                         similarities = np.dot(registered_embedding_vectors, current_embedding)
-#                         best_match_idx = np.argmax(similarities)
-#                         best_similarity = similarities[best_match_idx]
-#                         best_distance = 1 - best_similarity
-
-#                         matched_reg_no = registered_reg_nos[best_match_idx]
-
-#                         if best_distance < RECOGNITION_THRESHOLD:
-#                             if matched_reg_no not in last_marked_time or \
-#                                (current_time - last_marked_time[matched_reg_no]) > ATTENDANCE_COOLDOWN_SECONDS:
-
-#                                 attendance_records[matched_reg_no] = {
-#                                     'status': 'Present',
-#                                     'timestamp': datetime.now().isoformat()
-#                                 }
-#                                 last_marked_time[matched_reg_no] = current_time
-#                                 save_attendance_log()
-#                                 print(f"✅ Attendance marked for {matched_reg_no} at {datetime.now().strftime('%H:%M:%S')}")
-
-#                             cv2.rectangle(display_frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (0, 255, 0), 2)
-#                             cv2.putText(display_frame, f"{matched_reg_no} ({best_similarity:.2f})", (bbox[0], bbox[1] - 10),
-#                                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2, cv2.LINE_AA)
-#                         else:
-#                             cv2.rectangle(display_frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (0, 0, 255), 2)
-#                             cv2.putText(display_frame, "Unknown", (bbox[0], bbox[1] - 10),
-#                                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2, cv2.LINE_AA)
-#                     else:
-#                         cv2.rectangle(display_frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (255, 0, 0), 2)
-#                         cv2.putText(display_frame, "No Registered Faces", (bbox[0], bbox[1] - 10),
-#                                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2, cv2.LINE_AA)
-#         else:
-#             cv2.putText(display_frame, "No Face Detected", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA)
-
-#         try:
-#             frame_queue.put_nowait(display_frame)
-#         except queue.Full:
-#             pass
-
-#     cap.release()
-#     cv2.destroyAllWindows()
-#     save_attendance_log()
-#     print("🔴 [Camera Thread] Camera processing thread terminated.")
-
-# # --- Flask Application Setup ---
-# app_flask = Flask(__name__)
-# CORS(app_flask)
-
-# def generate_frames():
-#     while True:
-#         try:
-#             frame = frame_queue.get()
-#             ret, buffer = cv2.imencode('.jpg', frame)
-#             if not ret:
-#                 continue
-#             frame_bytes = buffer.tobytes()
-#             yield (b'--frame\r\n'
-#                    b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-#         except Exception as e:
-#             print(f"❌ Error in video frame generation: {e}")
-#             time.sleep(0.1)
-
-# @app_flask.route('/video_feed')
-# def video_feed():
-#     return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
-
-# @app_flask.route('/attendance_data')
-# def get_attendance_data():
-#     return jsonify(attendance_records.copy())
-
-# # --- NEW: Endpoint for RegisterStudent.js to get a single camera frame (proxied) ---
-# @app_flask.route('/register_camera_frame')
-# def get_register_camera_frame():
-#     with raw_frame_lock:
-#         if latest_raw_frame is None:
-#             return jsonify({"error": "Camera not ready or no frame captured yet"}), 503
-
-#         # Encode frame as JPEG
-#         ret, buffer = cv2.imencode('.jpg', latest_raw_frame)
-#         if not ret:
-#             return jsonify({"error": "Could not encode frame to JPEG"}), 500
-
-#         frame_base64 = base64.b64encode(buffer).decode('utf-8')
-#         return jsonify({"content": frame_base64})
-
-# # --- Endpoint for RegisterStudent.js to register students ---
-# @app_flask.route('/register', methods=['POST'])
-# def register_student():
-#     if 'image' not in request.files:
-#         return jsonify({"status": "error", "message": "No image file provided"}), 400
-
-#     image_file = request.files['image']
-#     name = request.form.get('name')
-#     reg_no = request.form.get('reg_no')
-#     roll_no = request.form.get('roll_no')
-#     section = request.form.get('section')
-
-#     if not all([name, reg_no, roll_no, section, image_file]):
-#         return jsonify({"status": "error", "message": "Missing required student details"}), 400
-
-#     safe_reg_no = "".join(c for c in reg_no if c.isalnum() or c in ('-', '_')).strip()
-#     if not safe_reg_no:
-#         return jsonify({"status": "error", "message": "Invalid Register Number for filename"}), 400
-
-#     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-#     filename = f"{safe_reg_no}_{timestamp}.jpg"
-#     save_path = os.path.join(REGISTERED_FACES_DIR, filename)
-
-#     try:
-#         image_file.save(save_path)
-#         print(f"✅ Saved new registration image: {save_path}")
-
-#         img = cv2.imread(save_path)
-#         if img is None:
-#             return jsonify({"status": "error", "message": "Failed to read saved image"}), 500
-
-#         faces = app.get(img)
-#         if faces:
-#             new_embedding = faces[0].embedding
-#             with embeddings_lock:
-#                 registered_embeddings[reg_no] = new_embedding
-#                 global registered_reg_nos, registered_embedding_vectors
-#                 registered_reg_nos = list(registered_embeddings.keys())
-#                 registered_embedding_vectors = np.array(list(registered_embeddings.values()))
-
-#                 with open(EMBEDDINGS_FILE, "wb") as f:
-#                     pickle.dump(registered_embeddings, f)
-#                 print(f"✅ Updated embeddings.pkl with new student {reg_no}.")
-#             return jsonify({"status": "success", "message": f"Student {name} ({reg_no}) registered and embeddings updated!"})
-#         else:
-#             os.remove(save_path)
-#             return jsonify({"status": "error", "message": "No face detected in the uploaded image. Registration failed."}), 400
-
-#     except Exception as e:
-#         print(f"❌ Error during registration: {e}")
-#         return jsonify({"status": "error", "message": f"Server error during registration: {e}"}), 500
-
-# @app_flask.route('/')
-# def index():
-#     return "Live Attendance Backend is running. Access /video_feed for stream, /attendance_data for JSON, /register_camera_frame for registration camera, and /register for student registration."
-
-# # --- Main Execution ---
-# if __name__ == '__main__':
-#     load_attendance_log()
-
-#     camera_thread = threading.Thread(target=camera_processing_thread, daemon=True)
-#     camera_thread.start()
-#     print(f"✅ Camera processing thread started.")
-
-#     print(f"🌐 Flask server starting on http://{FLASK_HOST}:{FLASK_PORT}")
-#     app_flask.run(host=FLASK_HOST, port=FLASK_PORT, debug=False, threaded=True)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# import cv2
-# import pickle
-# import numpy as np
-# from insightface.app import FaceAnalysis
-# import time
-# import os
-# import json
-# from datetime import datetime
-# from flask import Flask, Response, jsonify, request
-# from flask_cors import CORS
-# import threading
 # import base64
+# import smtplib
+# from email.mime.text import MIMEText
+# from email.mime.multipart import MIMEMultipart
+# from flask_cors import CORS
+
+# app_flask = Flask(__name__)
+# # This allows ALL origins. For development, this is the easiest fix.
+# CORS(app_flask, resources={r"/*": {"origins": "*"}})
 
 # print("🔹 Starting Live Attendance Monitoring Backend...")
 
+# # --- EMAIL CONFIGURATION (UPDATE THESE) ---
+# SMTP_SERVER = "smtp.gmail.com"
+# SMTP_PORT = 587
+# SENDER_EMAIL = "dsr.lovely.professional@gmail.com"  # <--- REPLACE THIS
+# SENDER_PASSWORD = "ysfm jnue jldj kdyv"  # <--- REPLACE THIS (16-char App Password)
+
 # # --- Configuration ---
-# CAMERA_URL = "http://10.172.140.210:8080/video"
+# CAMERA_URL = "http://10.206.244.30:8080/video"
 # REGISTERED_FACES_DIR = "registered_faces"
 # EMBEDDINGS_FILE = "embeddings.pkl"
 # ATTENDANCE_LOG_FILE = "attendance_log.json"
-# RECOGNITION_THRESHOLD = 0.35
-# ATTENDANCE_COOLDOWN_SECONDS = 30 # Increased slightly to prevent spam log
-# FLASK_HOST = '0.0.0.0'
-# FLASK_PORT = 5000
+# STUDENT_DB_FILE = "students.json" # Stores Name, Roll, Email
 
-# # --- Global Variables ---
-# attendance_records = {} 
-# last_marked_time = {} 
-
-# # -- Shared State for Threading --
-# # We store the latest frame and the latest detection results separately
-# global_frame = None
-# global_frame_lock = threading.Lock()
-
-# current_faces_data = [] # Stores coordinate and name data, not the image
-# faces_data_lock = threading.Lock()
-
-# # --- InsightFace Initialization ---
-# try:
-#     # detached detection size ensures model runs fast
-#     app = FaceAnalysis(name='buffalo_l', providers=['CUDAExecutionProvider', 'CPUExecutionProvider'])
-#     app.prepare(ctx_id=0, det_size=(640, 640)) 
-#     print("✅ InsightFace model loaded successfully.")
-# except Exception as e:
-#     print(f"❌ Error initializing InsightFace: {e}")
-#     exit()
-
-# # --- Embeddings Management ---
-# registered_embeddings = {}
-# registered_reg_nos = []
-# registered_embedding_vectors = np.array([])
-# embeddings_lock = threading.Lock()
-
-# def load_registered_embeddings():
-#     global registered_embeddings, registered_reg_nos, registered_embedding_vectors
-#     with embeddings_lock:
-#         if os.path.exists(EMBEDDINGS_FILE):
-#             try:
-#                 with open(EMBEDDINGS_FILE, "rb") as f:
-#                     data = pickle.load(f)
-#                     if isinstance(data, dict):
-#                         registered_embeddings = data
-#                         registered_reg_nos = list(data.keys())
-#                         registered_embedding_vectors = np.array(list(data.values()))
-#                         print(f"✅ Loaded {len(data)} students.")
-#                     else:
-#                         print("❌ Embeddings file corrupted.")
-#             except Exception as e:
-#                 print(f"❌ Error loading embeddings: {e}")
-
-# load_registered_embeddings()
-
-# # --- Attendance Logic ---
-# def load_attendance_log():
-#     global attendance_records
-#     if os.path.exists(ATTENDANCE_LOG_FILE):
-#         try:
-#             with open(ATTENDANCE_LOG_FILE, 'r') as f:
-#                 attendance_records = json.load(f)
-#         except:
-#             print("Could not read attendance log, starting fresh.")
-
-# def save_attendance_log():
-#     with open(ATTENDANCE_LOG_FILE, 'w') as f:
-#         json.dump(attendance_records, f, indent=4)
-
-# load_attendance_log()
-
-# # --- THREAD 1: Camera Capture (High Speed) ---
-# def capture_thread_func():
-#     global global_frame
-#     cap = cv2.VideoCapture(CAMERA_URL)
-    
-#     print("🟢 [Capture Thread] Stream started.")
-#     while True:
-#         ret, frame = cap.read()
-#         if not ret:
-#             print("❌ Camera disconnected, retrying in 2s...")
-#             cap.release()
-#             time.sleep(2)
-#             cap = cv2.VideoCapture(CAMERA_URL)
-#             continue
-        
-#         # Resize optional: If camera is 4k, resize to 720p for speed
-#         # frame = cv2.resize(frame, (1280, 720))
-
-#         with global_frame_lock:
-#             global_frame = frame.copy()
-        
-#         # Slight sleep to allow context switching
-#         time.sleep(0.01)
-
-# # --- THREAD 2: AI Processing (Running at its own pace) ---
-# def processing_thread_func():
-#     global current_faces_data, attendance_records, last_marked_time
-    
-#     print("🧠 [AI Thread] Detection logic started.")
-#     while True:
-#         frame_to_process = None
-        
-#         # 1. Get the latest frame
-#         with global_frame_lock:
-#             if global_frame is not None:
-#                 frame_to_process = global_frame.copy()
-        
-#         if frame_to_process is None:
-#             time.sleep(0.1)
-#             continue
-
-#         # 2. Run InsightFace (Heavy Operation)
-#         faces = app.get(frame_to_process)
-        
-#         # 3. Process Results
-#         processed_results = []
-#         current_time = time.time()
-        
-#         if faces:
-#             for face in faces:
-#                 bbox = face.bbox.astype(int)
-#                 embedding = face.embedding
-                
-#                 name = "Unknown"
-#                 color = (0, 0, 255) # Red
-#                 sim_score = 0.0
-
-#                 with embeddings_lock:
-#                     if registered_embedding_vectors.size > 0:
-#                         similarities = np.dot(registered_embedding_vectors, embedding)
-#                         best_idx = np.argmax(similarities)
-#                         best_sim = similarities[best_idx]
-#                         best_dist = 1 - best_sim
-                        
-#                         if best_dist < RECOGNITION_THRESHOLD:
-#                             matched_reg = registered_reg_nos[best_idx]
-#                             name = matched_reg
-#                             sim_score = best_sim
-#                             color = (0, 255, 0) # Green
-                            
-#                             # Mark Attendance
-#                             if matched_reg not in last_marked_time or \
-#                                (current_time - last_marked_time[matched_reg]) > ATTENDANCE_COOLDOWN_SECONDS:
-                                
-#                                 attendance_records[matched_reg] = {
-#                                     'status': 'Present',
-#                                     'timestamp': datetime.now().isoformat()
-#                                 }
-#                                 last_marked_time[matched_reg] = current_time
-#                                 save_attendance_log()
-#                                 print(f"✅ Marked: {matched_reg}")
-
-#                 processed_results.append({
-#                     "bbox": bbox,
-#                     "name": name,
-#                     "score": sim_score,
-#                     "color": color
-#                 })
-
-#         # 4. Update the shared results list
-#         with faces_data_lock:
-#             current_faces_data = processed_results
-        
-#         # 5. Throttle AI Loop (Optional: prevent CPU 100%)
-#         # Adjust this sleep to balance CPU usage vs Detection Speed
-#         time.sleep(0.05) 
-
-# # --- Flask App ---
-# app_flask = Flask(__name__)
-# CORS(app_flask)
-
-# def generate_video_stream():
-#     """Generates the MJPEG stream by overlaying LAST KNOWN data on LATEST frame"""
-#     while True:
-#         frame = None
-#         with global_frame_lock:
-#             if global_frame is not None:
-#                 frame = global_frame.copy()
-        
-#         if frame is None:
-#             time.sleep(0.1)
-#             continue
-
-#         # Draw the LAST KNOWN faces (Even if AI is calculating next frame)
-#         # This keeps the video smooth (30fps) even if AI is 5fps
-#         local_faces_data = []
-#         with faces_data_lock:
-#             local_faces_data = current_faces_data # Copy reference
-
-#         for data in local_faces_data:
-#             x1, y1, x2, y2 = data["bbox"]
-#             cv2.rectangle(frame, (x1, y1), (x2, y2), data["color"], 2)
-#             label = f"{data['name']}"
-#             if data["score"] > 0:
-#                 label += f" ({data['score']:.2f})"
-#             cv2.putText(frame, label, (x1, y1 - 10), 
-#                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, data["color"], 2)
-
-#         # Encode
-#         ret, buffer = cv2.imencode('.jpg', frame)
-#         frame_bytes = buffer.tobytes()
-#         yield (b'--frame\r\n'
-#                b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-        
-#         # Limit stream to ~30 FPS to save bandwidth
-#         time.sleep(0.03)
-
-# @app_flask.route('/video_feed')
-# def video_feed():
-#     return Response(generate_video_stream(), mimetype='multipart/x-mixed-replace; boundary=frame')
-
-# @app_flask.route('/attendance_data')
-# def get_attendance_data():
-#     return jsonify(attendance_records)
-
-# @app_flask.route('/register_camera_frame')
-# def get_register_camera_frame():
-#     # Helper for RegisterStudent.js to get a snapshot
-#     frame = None
-#     with global_frame_lock:
-#         if global_frame is not None:
-#             frame = global_frame.copy()
-            
-#     if frame is None:
-#         return jsonify({"error": "Camera loading..."}), 503
-        
-#     ret, buffer = cv2.imencode('.jpg', frame)
-#     b64_img = base64.b64encode(buffer).decode('utf-8')
-#     return jsonify({"content": b64_img})
-
-# @app_flask.route('/register', methods=['POST'])
-# def register_student():
-#     if 'image' not in request.files:
-#         return jsonify({"status": "error", "message": "No image"}), 400
-    
-#     file = request.files['image']
-#     reg_no = request.form.get('reg_no')
-#     name = request.form.get('name')
-
-#     if not reg_no or not file:
-#         return jsonify({"status": "error", "message": "Missing info"}), 400
-
-#     filename = f"{reg_no}_{datetime.now().strftime('%Y%m%d%H%M%S')}.jpg"
-#     path = os.path.join(REGISTERED_FACES_DIR, filename)
-#     file.save(path)
-    
-#     # Generate embedding immediately
-#     img = cv2.imread(path)
-#     faces = app.get(img)
-#     if not faces:
-#         os.remove(path)
-#         return jsonify({"status": "error", "message": "No face detected in upload"}), 400
-    
-#     with embeddings_lock:
-#         registered_embeddings[reg_no] = faces[0].embedding
-#         # Update lookup arrays
-#         global registered_reg_nos, registered_embedding_vectors
-#         registered_reg_nos = list(registered_embeddings.keys())
-#         registered_embedding_vectors = np.array(list(registered_embeddings.values()))
-#         # Save to disk
-#         with open(EMBEDDINGS_FILE, "wb") as f:
-#             pickle.dump(registered_embeddings, f)
-            
-#     return jsonify({"status": "success", "message": f"Registered {name}"})
-
-# if __name__ == '__main__':
-#     # 1. Start Capture Thread
-#     t_cap = threading.Thread(target=capture_thread_func, daemon=True)
-#     t_cap.start()
-
-#     # 2. Start AI Processing Thread
-#     t_ai = threading.Thread(target=processing_thread_func, daemon=True)
-#     t_ai.start()
-
-#     # 3. Start Flask
-#     print(f"🌐 Server running at http://{FLASK_HOST}:{FLASK_PORT}")
-#     app_flask.run(host=FLASK_HOST, port=FLASK_PORT, threaded=True, debug=False)
-
-
-
-# import cv2
-# import pickle
-# import numpy as np
-# from insightface.app import FaceAnalysis
-# import time
-# import os
-# import json
-# from datetime import datetime
-# from flask import Flask, Response, jsonify, request
-# from flask_cors import CORS
-# import threading
-# import base64
-
-# print("🔹 Starting Live Attendance Monitoring Backend...")
-
-# # --- Configuration ---
-# CAMERA_URL = "http://10.172.140.210:8080/video"
-# REGISTERED_FACES_DIR = "registered_faces"
-# EMBEDDINGS_FILE = "embeddings.pkl"
-# ATTENDANCE_LOG_FILE = "attendance_log.json"
-# RECOGNITION_THRESHOLD = 0.35
-# ATTENDANCE_COOLDOWN_SECONDS = 30 
-# FLASK_HOST = '0.0.0.0'
-# FLASK_PORT = 5000
-
-# # --- Global Variables ---
-# attendance_records = {} 
-# last_marked_time = {} 
-
-# # -- Shared State for Threading --
-# global_frame = None
-# global_frame_lock = threading.Lock()
-
-# current_faces_data = [] 
-# faces_data_lock = threading.Lock()
-
-# # --- InsightFace Initialization ---
-# try:
-#     app = FaceAnalysis(name='buffalo_l', providers=['CUDAExecutionProvider', 'CPUExecutionProvider'])
-#     app.prepare(ctx_id=0, det_size=(640, 640)) 
-#     print("✅ InsightFace model loaded successfully.")
-# except Exception as e:
-#     print(f"❌ Error initializing InsightFace: {e}")
-#     exit()
-
-# # --- Embeddings Management ---
-# registered_embeddings = {}
-# registered_reg_nos = []
-# registered_embedding_vectors = np.array([])
-# embeddings_lock = threading.Lock()
-
-# def load_registered_embeddings():
-#     global registered_embeddings, registered_reg_nos, registered_embedding_vectors
-#     with embeddings_lock:
-#         if os.path.exists(EMBEDDINGS_FILE):
-#             try:
-#                 with open(EMBEDDINGS_FILE, "rb") as f:
-#                     data = pickle.load(f)
-#                     if isinstance(data, dict):
-#                         registered_embeddings = data
-#                         registered_reg_nos = list(data.keys())
-#                         registered_embedding_vectors = np.array(list(data.values()))
-#                         print(f"✅ Loaded {len(data)} students.")
-#                     else:
-#                         print("❌ Embeddings file corrupted.")
-#             except Exception as e:
-#                 print(f"❌ Error loading embeddings: {e}")
-
-# load_registered_embeddings()
-
-# # --- Attendance Logic ---
-# def load_attendance_log():
-#     global attendance_records
-#     if os.path.exists(ATTENDANCE_LOG_FILE):
-#         try:
-#             with open(ATTENDANCE_LOG_FILE, 'r') as f:
-#                 attendance_records = json.load(f)
-#         except:
-#             print("Could not read attendance log, starting fresh.")
-
-# def save_attendance_log():
-#     with open(ATTENDANCE_LOG_FILE, 'w') as f:
-#         json.dump(attendance_records, f, indent=4)
-
-# load_attendance_log()
-
-# # --- THREAD 1: Camera Capture ---
-# def capture_thread_func():
-#     global global_frame
-#     cap = cv2.VideoCapture(CAMERA_URL)
-    
-#     print("🟢 [Capture Thread] Stream started.")
-#     while True:
-#         ret, frame = cap.read()
-#         if not ret:
-#             print("❌ Camera disconnected, retrying in 2s...")
-#             cap.release()
-#             time.sleep(2)
-#             cap = cv2.VideoCapture(CAMERA_URL)
-#             continue
-        
-#         with global_frame_lock:
-#             global_frame = frame.copy()
-        
-#         time.sleep(0.01)
-
-# # --- THREAD 2: AI Processing ---
-# def processing_thread_func():
-#     global current_faces_data, attendance_records, last_marked_time
-    
-#     print("🧠 [AI Thread] Detection logic started.")
-#     while True:
-#         frame_to_process = None
-        
-#         with global_frame_lock:
-#             if global_frame is not None:
-#                 frame_to_process = global_frame.copy()
-        
-#         if frame_to_process is None:
-#             time.sleep(0.1)
-#             continue
-
-#         faces = app.get(frame_to_process)
-        
-#         processed_results = []
-#         current_time = time.time()
-        
-#         if faces:
-#             for face in faces:
-#                 bbox = face.bbox.astype(int)
-#                 embedding = face.embedding
-                
-#                 name = "Unknown"
-#                 color = (0, 0, 255) # Red
-#                 sim_score = 0.0
-
-#                 with embeddings_lock:
-#                     if registered_embedding_vectors.size > 0:
-#                         similarities = np.dot(registered_embedding_vectors, embedding)
-#                         best_idx = np.argmax(similarities)
-#                         best_sim = similarities[best_idx]
-#                         best_dist = 1 - best_sim
-                        
-#                         if best_dist < RECOGNITION_THRESHOLD:
-#                             matched_reg = registered_reg_nos[best_idx]
-#                             name = matched_reg
-#                             sim_score = best_sim
-#                             color = (0, 255, 0) # Green
-                            
-#                             if matched_reg not in last_marked_time or \
-#                                (current_time - last_marked_time[matched_reg]) > ATTENDANCE_COOLDOWN_SECONDS:
-                                
-#                                 attendance_records[matched_reg] = {
-#                                     'status': 'Present',
-#                                     'timestamp': datetime.now().isoformat()
-#                                 }
-#                                 last_marked_time[matched_reg] = current_time
-#                                 save_attendance_log()
-#                                 print(f"✅ Marked: {matched_reg}")
-
-#                 processed_results.append({
-#                     "bbox": bbox,
-#                     "name": name,
-#                     "score": sim_score,
-#                     "color": color
-#                 })
-
-#         with faces_data_lock:
-#             current_faces_data = processed_results
-        
-#         time.sleep(0.05) 
-
-# # --- Flask App ---
-# app_flask = Flask(__name__)
-# CORS(app_flask)
-
-# def generate_video_stream():
-#     while True:
-#         frame = None
-#         with global_frame_lock:
-#             if global_frame is not None:
-#                 frame = global_frame.copy()
-        
-#         if frame is None:
-#             time.sleep(0.1)
-#             continue
-
-#         local_faces_data = []
-#         with faces_data_lock:
-#             local_faces_data = current_faces_data 
-
-#         for data in local_faces_data:
-#             x1, y1, x2, y2 = data["bbox"]
-#             cv2.rectangle(frame, (x1, y1), (x2, y2), data["color"], 2)
-#             label = f"{data['name']}"
-#             if data["score"] > 0:
-#                 label += f" ({data['score']:.2f})"
-#             cv2.putText(frame, label, (x1, y1 - 10), 
-#                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, data["color"], 2)
-
-#         ret, buffer = cv2.imencode('.jpg', frame)
-#         if not ret: continue
-#         frame_bytes = buffer.tobytes()
-#         yield (b'--frame\r\n'
-#                b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-        
-#         time.sleep(0.03)
-
-# @app_flask.route('/video_feed')
-# def video_feed():
-#     return Response(generate_video_stream(), mimetype='multipart/x-mixed-replace; boundary=frame')
-
-# @app_flask.route('/attendance_data')
-# def get_attendance_data():
-#     return jsonify(attendance_records)
-
-# # --- FIX: Added Reset Endpoint ---
-# @app_flask.route('/reset_attendance', methods=['POST'])
-# def reset_attendance():
-#     global attendance_records, last_marked_time
-#     # Clear Memory
-#     attendance_records = {}
-#     last_marked_time = {}
-#     # Clear File
-#     save_attendance_log()
-#     print("⚠️ Attendance log has been reset by user.")
-#     return jsonify({"status": "success", "message": "Attendance log cleared."})
-
-# @app_flask.route('/register_camera_frame')
-# def get_register_camera_frame():
-#     frame = None
-#     with global_frame_lock:
-#         if global_frame is not None:
-#             frame = global_frame.copy()
-            
-#     if frame is None:
-#         return jsonify({"error": "Camera loading..."}), 503
-        
-#     ret, buffer = cv2.imencode('.jpg', frame)
-#     b64_img = base64.b64encode(buffer).decode('utf-8')
-#     return jsonify({"content": b64_img})
-
-# @app_flask.route('/register', methods=['POST'])
-# def register_student():
-#     if 'image' not in request.files:
-#         return jsonify({"status": "error", "message": "No image"}), 400
-    
-#     file = request.files['image']
-#     reg_no = request.form.get('reg_no')
-#     name = request.form.get('name')
-
-#     if not reg_no or not file:
-#         return jsonify({"status": "error", "message": "Missing info"}), 400
-
-#     if not os.path.exists(REGISTERED_FACES_DIR):
-#         os.makedirs(REGISTERED_FACES_DIR)
-
-#     filename = f"{reg_no}_{datetime.now().strftime('%Y%m%d%H%M%S')}.jpg"
-#     path = os.path.join(REGISTERED_FACES_DIR, filename)
-#     file.save(path)
-    
-#     img = cv2.imread(path)
-#     faces = app.get(img)
-#     if not faces:
-#         os.remove(path)
-#         return jsonify({"status": "error", "message": "No face detected in upload"}), 400
-    
-#     with embeddings_lock:
-#         registered_embeddings[reg_no] = faces[0].embedding
-#         global registered_reg_nos, registered_embedding_vectors
-#         registered_reg_nos = list(registered_embeddings.keys())
-#         registered_embedding_vectors = np.array(list(registered_embeddings.values()))
-#         with open(EMBEDDINGS_FILE, "wb") as f:
-#             pickle.dump(registered_embeddings, f)
-            
-#     return jsonify({"status": "success", "message": f"Registered {name}"})
-
-# if __name__ == '__main__':
-#     t_cap = threading.Thread(target=capture_thread_func, daemon=True)
-#     t_cap.start()
-
-#     t_ai = threading.Thread(target=processing_thread_func, daemon=True)
-#     t_ai.start()
-
-#     print(f"🌐 Server running at http://{FLASK_HOST}:{FLASK_PORT}")
-#     app_flask.run(host=FLASK_HOST, port=FLASK_PORT, threaded=True, debug=False)
-
-
-# import cv2
-# import pickle
-# import numpy as np
-# from insightface.app import FaceAnalysis
-# import time
-# import os
-# import json
-# from datetime import datetime
-# from flask import Flask, Response, jsonify, request
-# from flask_cors import CORS
-# import threading
-# import base64
-
-# print("🔹 Starting Live Attendance Monitoring Backend...")
-
-# # --- Configuration ---
-# CAMERA_URL = "http://10.172.140.210:8080/video"
-# REGISTERED_FACES_DIR = "registered_faces"
-# EMBEDDINGS_FILE = "embeddings.pkl"
-# ATTENDANCE_LOG_FILE = "attendance_log.json"
-
-# # --- TUNING PARAMETERS (CRITICAL) ---
-# # SIMILARITY_THRESHOLD: 
-# # 0.50 = Loose (Easy match, potential false positives)
-# # 0.60 = Strict (Good for attendance)
-# # 0.70 = Very Strict (Might not recognize you if lighting changes)
+# # --- TUNING ---
 # SIMILARITY_THRESHOLD = 0.60  
-
 # MIN_FACE_SIZE = 80 
 # ATTENDANCE_COOLDOWN_SECONDS = 30 
 # FLASK_HOST = '0.0.0.0'
@@ -918,10 +45,9 @@
 # attendance_records = {} 
 # last_marked_time = {} 
 
-# # -- Shared State for Threading --
+# # -- Shared State --
 # global_frame = None
 # global_frame_lock = threading.Lock()
-
 # current_faces_data = [] 
 # faces_data_lock = threading.Lock()
 
@@ -934,14 +60,18 @@
 #     print(f"❌ Error initializing InsightFace: {e}")
 #     exit()
 
-# # --- Embeddings Management ---
+# # --- Data Management ---
 # registered_embeddings = {}
 # registered_reg_nos = []
 # registered_embedding_vectors = np.array([])
 # embeddings_lock = threading.Lock()
 
-# def load_registered_embeddings():
-#     global registered_embeddings, registered_reg_nos, registered_embedding_vectors
+# student_db = {} # {reg_no: {name, email, roll, section}}
+
+# def load_data():
+#     global registered_embeddings, registered_reg_nos, registered_embedding_vectors, student_db
+    
+#     # Load Embeddings
 #     with embeddings_lock:
 #         if os.path.exists(EMBEDDINGS_FILE):
 #             try:
@@ -951,30 +81,32 @@
 #                         registered_embeddings = data
 #                         registered_reg_nos = list(data.keys())
 #                         registered_embedding_vectors = np.array(list(data.values()))
-                        
-#                         # CRITICAL: Ensure loaded embeddings are normalized
-#                         # This handles cases where old embeddings might not be normalized
+#                         # Normalize vectors
 #                         if registered_embedding_vectors.size > 0:
 #                             norms = np.linalg.norm(registered_embedding_vectors, axis=1, keepdims=True)
 #                             registered_embedding_vectors = registered_embedding_vectors / norms
-
-#                         print(f"✅ Loaded {len(data)} students.")
-#                     else:
-#                         print("❌ Embeddings file corrupted.")
+#                         print(f"✅ Loaded {len(data)} student embeddings.")
 #             except Exception as e:
 #                 print(f"❌ Error loading embeddings: {e}")
 
-# load_registered_embeddings()
+#     # Load Student Details (Emails)
+#     if os.path.exists(STUDENT_DB_FILE):
+#         try:
+#             with open(STUDENT_DB_FILE, 'r') as f:
+#                 student_db = json.load(f)
+#             print(f"✅ Loaded {len(student_db)} student records (emails).")
+#         except Exception as e:
+#             print(f"❌ Error loading student DB: {e}")
 
-# # --- Attendance Logic ---
+# load_data()
+
 # def load_attendance_log():
 #     global attendance_records
 #     if os.path.exists(ATTENDANCE_LOG_FILE):
 #         try:
 #             with open(ATTENDANCE_LOG_FILE, 'r') as f:
 #                 attendance_records = json.load(f)
-#         except:
-#             pass
+#         except: pass
 
 # def save_attendance_log():
 #     with open(ATTENDANCE_LOG_FILE, 'w') as f:
@@ -982,35 +114,74 @@
 
 # load_attendance_log()
 
-# # --- THREAD 1: Camera Capture ---
+# # --- EMAIL LOGIC ---
+# def send_email_thread(absent_students):
+#     """Sends emails in a background thread"""
+#     print(f"📧 Sending emails to {len(absent_students)} parents...")
+    
+#     try:
+#         server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+#         server.starttls()
+#         server.login(SENDER_EMAIL, SENDER_PASSWORD)
+        
+#         count = 0
+#         for student in absent_students:
+#             parent_email = student.get('email')
+#             name = student.get('name')
+#             reg_no = student.get('reg_no')
+            
+#             if not parent_email or "@" not in parent_email:
+#                 print(f"⚠️ Skipping {name}: Invalid email '{parent_email}'")
+#                 continue
+                
+#             subject = f"Absence Alert: {name} ({reg_no})"
+#             body = f"""
+#             Dear Parent,
+            
+#             This is to inform you that your ward, {name} (Reg No: {reg_no}), was marked ABSENT for today's live class session.
+            
+#             Date: {datetime.now().strftime('%Y-%m-%d')}
+            
+#             Regards,
+#             University Attendance System
+#             """
+            
+#             msg = MIMEMultipart()
+#             msg['From'] = SENDER_EMAIL
+#             msg['To'] = parent_email
+#             msg['Subject'] = subject
+#             msg.attach(MIMEText(body, 'plain'))
+            
+#             server.send_message(msg)
+#             count += 1
+#             print(f"📤 Email sent for {name} to {parent_email}")
+            
+#         server.quit()
+#         print(f"✅ Finished sending {count} emails.")
+        
+#     except Exception as e:
+#         print(f"❌ Email Error: {e}")
+
+# # --- THREADS (Camera & AI) ---
 # def capture_thread_func():
 #     global global_frame
 #     cap = cv2.VideoCapture(CAMERA_URL)
-#     print("🟢 [Capture Thread] Stream started.")
 #     while True:
 #         ret, frame = cap.read()
 #         if not ret:
-#             print("❌ Camera disconnected, retrying...")
-#             cap.release()
 #             time.sleep(2)
 #             cap = cv2.VideoCapture(CAMERA_URL)
 #             continue
-        
 #         with global_frame_lock:
 #             global_frame = frame.copy()
 #         time.sleep(0.01)
 
-# # --- THREAD 2: AI Processing ---
 # def processing_thread_func():
 #     global current_faces_data, attendance_records, last_marked_time
-#     print("🧠 [AI Thread] Detection logic started.")
-    
 #     while True:
 #         frame_to_process = None
 #         with global_frame_lock:
-#             if global_frame is not None:
-#                 frame_to_process = global_frame.copy()
-        
+#             if global_frame is not None: frame_to_process = global_frame.copy()
 #         if frame_to_process is None:
 #             time.sleep(0.1)
 #             continue
@@ -1022,60 +193,44 @@
 #         if faces:
 #             for face in faces:
 #                 bbox = face.bbox.astype(int)
-                
-#                 # Filter Small Faces
-#                 face_w = bbox[2] - bbox[0]
-#                 face_h = bbox[3] - bbox[1]
-#                 if face_w < MIN_FACE_SIZE: continue
+#                 if (bbox[2]-bbox[0]) < MIN_FACE_SIZE: continue
 
-#                 # CRITICAL: Normalize Live Embedding
 #                 embedding = face.embedding
 #                 norm = np.linalg.norm(embedding)
-#                 if norm > 0:
-#                     embedding = embedding / norm
+#                 if norm > 0: embedding = embedding / norm
 
 #                 name = "Unknown"
-#                 color = (0, 0, 255) # Red
+#                 color = (0, 0, 255)
 #                 sim_score = 0.0
 
 #                 with embeddings_lock:
 #                     if registered_embedding_vectors.size > 0:
-#                         # Dot product of normalized vectors = Cosine Similarity
 #                         similarities = np.dot(registered_embedding_vectors, embedding)
 #                         best_idx = np.argmax(similarities)
 #                         best_sim = similarities[best_idx]
                         
-#                         # Check Similarity Threshold (Higher is better)
 #                         if best_sim > SIMILARITY_THRESHOLD:
 #                             matched_reg = registered_reg_nos[best_idx]
 #                             name = matched_reg
 #                             sim_score = best_sim
-#                             color = (0, 255, 0) # Green
+#                             color = (0, 255, 0)
                             
 #                             if matched_reg not in last_marked_time or \
 #                                (current_time - last_marked_time[matched_reg]) > ATTENDANCE_COOLDOWN_SECONDS:
-                                
 #                                 attendance_records[matched_reg] = {
 #                                     'status': 'Present',
 #                                     'timestamp': datetime.now().isoformat()
 #                                 }
 #                                 last_marked_time[matched_reg] = current_time
 #                                 save_attendance_log()
-#                                 print(f"✅ Marked: {matched_reg} (Score: {best_sim:.2f})")
+#                                 print(f"✅ Marked: {matched_reg}")
 
-#                 processed_results.append({
-#                     "bbox": bbox,
-#                     "name": name,
-#                     "score": sim_score,
-#                     "color": color
-#                 })
-
+#                 processed_results.append({"bbox": bbox, "name": name, "score": sim_score, "color": color})
 #         with faces_data_lock:
 #             current_faces_data = processed_results
-        
 #         time.sleep(0.05) 
 
-# # --- Flask App ---
+# # --- FLASK ENDPOINTS ---
 # app_flask = Flask(__name__)
 # CORS(app_flask)
 
@@ -1083,28 +238,20 @@
 #     while True:
 #         frame = None
 #         with global_frame_lock:
-#             if global_frame is not None:
-#                 frame = global_frame.copy()
-        
+#             if global_frame is not None: frame = global_frame.copy()
 #         if frame is None:
 #             time.sleep(0.1)
 #             continue
-
+        
 #         local_faces_data = []
-#         with faces_data_lock:
-#             local_faces_data = current_faces_data 
+#         with faces_data_lock: local_faces_data = current_faces_data 
 
 #         for data in local_faces_data:
 #             x1, y1, x2, y2 = data["bbox"]
 #             cv2.rectangle(frame, (x1, y1), (x2, y2), data["color"], 2)
-            
-#             # Show Name and Score on Video
 #             label = f"{data['name']}"
-#             if data['name'] != "Unknown":
-#                 label += f" ({int(data['score']*100)}%)"
-            
-#             cv2.putText(frame, label, (x1, y1 - 10), 
-#                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, data["color"], 2)
+#             if data['name'] != "Unknown": label += f" ({int(data['score']*100)}%)"
+#             cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, data["color"], 2)
 
 #         ret, buffer = cv2.imencode('.jpg', frame)
 #         if not ret: continue
@@ -1127,6 +274,33 @@
 #     save_attendance_log()
 #     return jsonify({"status": "success", "message": "Cleared."})
 
+# @app_flask.route('/end_session_notify', methods=['POST'])
+# def end_session_notify():
+#     """Calculate absentees and send emails"""
+#     global attendance_records, student_db
+    
+#     # 1. Identify Absentees
+#     absent_students = []
+#     present_reg_nos = list(attendance_records.keys())
+    
+#     for reg_no, details in student_db.items():
+#         if reg_no not in present_reg_nos:
+#             absent_record = details.copy()
+#             absent_record['reg_no'] = reg_no
+#             absent_students.append(absent_record)
+    
+#     if not absent_students:
+#         return jsonify({"status": "success", "message": "Everyone is present! No emails sent."})
+
+#     # 2. Start Email Thread (Don't block response)
+#     email_thread = threading.Thread(target=send_email_thread, args=(absent_students,))
+#     email_thread.start()
+    
+#     return jsonify({
+#         "status": "success", 
+#         "message": f"Identified {len(absent_students)} absentees. Sending emails in background..."
+#     })
+
 # @app_flask.route('/register_camera_frame')
 # def get_register_camera_frame():
 #     frame = None
@@ -1142,19 +316,25 @@
 #     file = request.files['image']
 #     reg_no = request.form.get('reg_no')
 #     name = request.form.get('name')
+#     email = request.form.get('email') # New Field
+#     roll_no = request.form.get('roll_no')
+#     section = request.form.get('section')
 
+#     if not reg_no or not file: return jsonify({"status": "error"}), 400
 #     if not os.path.exists(REGISTERED_FACES_DIR): os.makedirs(REGISTERED_FACES_DIR)
+    
+#     # Save Image
 #     filename = f"{reg_no}_{datetime.now().strftime('%Y%m%d%H%M%S')}.jpg"
 #     path = os.path.join(REGISTERED_FACES_DIR, filename)
 #     file.save(path)
     
+#     # Generate Embedding
 #     img = cv2.imread(path)
 #     faces = app.get(img)
 #     if not faces:
 #         os.remove(path)
 #         return jsonify({"status": "error", "message": "No face detected"}), 400
     
-#     # Register with Normalization
 #     faces.sort(key=lambda x: (x.bbox[2]-x.bbox[0])*(x.bbox[3]-x.bbox[1]), reverse=True)
 #     embedding = faces[0].embedding
 #     norm = np.linalg.norm(embedding)
@@ -1165,10 +345,43 @@
 #         global registered_reg_nos, registered_embedding_vectors
 #         registered_reg_nos = list(registered_embeddings.keys())
 #         registered_embedding_vectors = np.array(list(registered_embeddings.values()))
-#         with open(EMBEDDINGS_FILE, "wb") as f:
-#             pickle.dump(registered_embeddings, f)
+#         with open(EMBEDDINGS_FILE, "wb") as f: pickle.dump(registered_embeddings, f)
+        
+#         # Save Student Details to DB (JSON)
+#         student_db[reg_no] = {
+#             "name": name,
+#             "email": email,
+#             "roll_no": roll_no,
+#             "section": section
+#         }
+#         with open(STUDENT_DB_FILE, "w") as f:
+#             json.dump(student_db, f, indent=4)
             
-#     return jsonify({"status": "success", "message": f"Registered {name}"})
+#     return jsonify({"status": "success", "message": f"Registered {name} & Saved Email."})
+
+# # --- MOVE THIS UP ---
+# @app_flask.route('/students', methods=['GET'])
+# def get_all_students():
+#     global student_db
+#     if os.path.exists(STUDENT_DB_FILE):
+#         with open(STUDENT_DB_FILE, 'r') as f:
+#             student_db = json.load(f)
+    
+#     student_list = []
+#     for reg_no, info in student_db.items():
+#         student_list.append({
+#             "register_no": reg_no,
+#             "name": info.get("name", "N/A"),
+#             "roll_no": info.get("roll_no", "N/A"),
+#             "section": info.get("section", "N/A"),
+#             "email": info.get("email", "N/A")
+#         })
+#     return jsonify(student_list)
+
+# # --- THIS MUST BE THE VERY LAST THING IN THE FILE ---
+# if __name__ == '__main__':
+#     # ... threads etc ...
+#     app_flask.run(host=FLASK_HOST, port=FLASK_PORT, threaded=True, debug=False)
 
 # if __name__ == '__main__':
 #     t_cap = threading.Thread(target=capture_thread_func, daemon=True)
@@ -1177,6 +390,576 @@
 #     t_ai.start()
 #     print(f"🌐 Server running at http://{FLASK_HOST}:{FLASK_PORT}")
 #     app_flask.run(host=FLASK_HOST, port=FLASK_PORT, threaded=True, debug=False)
+
+
+#     # Add this inside main.py (e.g., above the @app_flask.route('/video_feed') line)
+
+# @app_flask.route('/students', methods=['GET'])
+# def get_all_students():
+#     """Returns a list of all registered students from student_db"""
+#     global student_db
+    
+#     # Reload data to ensure we have the latest registrations
+#     if os.path.exists(STUDENT_DB_FILE):
+#         try:
+#             with open(STUDENT_DB_FILE, 'r') as f:
+#                 student_db = json.load(f)
+#         except Exception as e:
+#             print(f"Error loading student DB: {e}")
+
+#     student_list = []
+#     for reg_no, info in student_db.items():
+#         student_list.append({
+#             "register_no": reg_no,
+#             "name": info.get("name", "N/A"),
+#             "roll_no": info.get("roll_no", "N/A"),
+#             "section": info.get("section", "N/A"),
+#             "email": info.get("email", "N/A")
+#         })
+    
+#     return jsonify(student_list)
+
+
+
+
+
+
+
+
+
+
+
+
+
+# import cv2
+# import pickle
+# import numpy as np
+# from insightface.app import FaceAnalysis
+# import time
+# import os
+# import json
+# from datetime import datetime
+# from flask import Flask, Response, jsonify, request
+# from flask_cors import CORS
+# import threading
+# import base64
+# import smtplib
+# from email.mime.text import MIMEText
+# from email.mime.multipart import MIMEMultipart
+
+# # --- INITIALIZE FLASK & CORS ---
+# app_flask = Flask(__name__)
+# # This allows your React frontend (usually port 3000) to talk to this Python server
+# CORS(app_flask, resources={r"/*": {"origins": "*"}})
+
+# print("🔹 Starting Live Attendance Monitoring Backend...")
+
+# # --- EMAIL CONFIGURATION ---
+# SMTP_SERVER = "smtp.gmail.com"
+# SMTP_PORT = 587
+# SENDER_EMAIL = "dsr.lovely.professional@gmail.com"
+# SENDER_PASSWORD = "ysfm jnue jldj kdyv" 
+
+# # --- CONFIGURATION & PATHS ---
+# CAMERA_URL = "http://10.218.217.4:8080/video"
+# REGISTERED_FACES_DIR = "registered_faces"
+# EMBEDDINGS_FILE = "embeddings.pkl"
+# ATTENDANCE_LOG_FILE = "attendance_log.json"
+# STUDENT_DB_FILE = "students.json"  # <--- Source of truth for your Student List
+
+# # --- TUNING ---
+# SIMILARITY_THRESHOLD = 0.60  
+# MIN_FACE_SIZE = 80 
+# ATTENDANCE_COOLDOWN_SECONDS = 30 
+# FLASK_HOST = '0.0.0.0'
+# FLASK_PORT = 5000
+
+# # --- GLOBAL STATE ---
+# attendance_records = {} 
+# last_marked_time = {} 
+# global_frame = None
+# global_frame_lock = threading.Lock()
+# current_faces_data = [] 
+# faces_data_lock = threading.Lock()
+# student_db = {}
+# registered_embeddings = {}
+# registered_reg_nos = []
+# registered_embedding_vectors = np.array([])
+# embeddings_lock = threading.Lock()
+
+# # --- INSIGHTFACE INITIALIZATION ---
+# try:
+#     # ctx_id=0 for GPU, -1 for CPU. 
+#     app = FaceAnalysis(name='buffalo_l', providers=['CUDAExecutionProvider', 'CPUExecutionProvider'])
+#     app.prepare(ctx_id=0, det_size=(640, 640)) 
+#     print("✅ InsightFace model loaded successfully.")
+# except Exception as e:
+#     print(f"❌ Error initializing InsightFace: {e}")
+#     exit()
+
+# # --- DATA MANAGEMENT ---
+# def load_data():
+#     global registered_embeddings, registered_reg_nos, registered_embedding_vectors, student_db
+    
+#     # 1. Load Student Details (JSON)
+#     if os.path.exists(STUDENT_DB_FILE):
+#         try:
+#             with open(STUDENT_DB_FILE, 'r') as f:
+#                 student_db = json.load(f)
+#             print(f"✅ Loaded {len(student_db)} student records from JSON.")
+#         except Exception as e:
+#             print(f"❌ Error loading student DB: {e}")
+
+#     # 2. Load Embeddings (PKL)
+#     with embeddings_lock:
+#         if os.path.exists(EMBEDDINGS_FILE):
+#             try:
+#                 with open(EMBEDDINGS_FILE, "rb") as f:
+#                     data = pickle.load(f)
+#                     if isinstance(data, dict):
+#                         registered_embeddings = data
+#                         registered_reg_nos = list(data.keys())
+#                         registered_embedding_vectors = np.array(list(data.values()))
+#                         if registered_embedding_vectors.size > 0:
+#                             norms = np.linalg.norm(registered_embedding_vectors, axis=1, keepdims=True)
+#                             registered_embedding_vectors = registered_embedding_vectors / norms
+#                         print(f"✅ Loaded {len(data)} student embeddings.")
+#             except: pass
+
+# def save_student_db():
+#     with open(STUDENT_DB_FILE, 'w') as f:
+#         json.dump(student_db, f, indent=4)
+
+# load_data()
+
+# # --- BACKGROUND THREADS ---
+# def capture_thread_func():
+#     global global_frame
+#     cap = cv2.VideoCapture(CAMERA_URL)
+#     while True:
+#         ret, frame = cap.read()
+#         if not ret:
+#             time.sleep(2)
+#             cap = cv2.VideoCapture(CAMERA_URL)
+#             continue
+#         with global_frame_lock:
+#             global_frame = frame.copy()
+#         time.sleep(0.01)
+
+# def processing_thread_func():
+#     global current_faces_data, attendance_records, last_marked_time
+#     while True:
+#         frame_to_process = None
+#         with global_frame_lock:
+#             if global_frame is not None: frame_to_process = global_frame.copy()
+        
+#         if frame_to_process is None:
+#             time.sleep(0.1)
+#             continue
+
+#         faces = app.get(frame_to_process)
+#         processed_results = []
+#         current_time = time.time()
+        
+#         if faces:
+#             for face in faces:
+#                 bbox = face.bbox.astype(int)
+#                 if (bbox[2]-bbox[0]) < MIN_FACE_SIZE: continue
+
+#                 embedding = face.embedding
+#                 norm = np.linalg.norm(embedding)
+#                 if norm > 0: embedding = embedding / norm
+
+#                 name, color, sim_score = "Unknown", (0, 0, 255), 0.0
+
+#                 with embeddings_lock:
+#                     if registered_embedding_vectors.size > 0:
+#                         similarities = np.dot(registered_embedding_vectors, embedding)
+#                         best_idx = np.argmax(similarities)
+#                         if similarities[best_idx] > SIMILARITY_THRESHOLD:
+#                             name = registered_reg_nos[best_idx]
+#                             sim_score = similarities[best_idx]
+#                             color = (0, 255, 0)
+                            
+#                             # Mark Attendance
+#                             if name not in last_marked_time or (current_time - last_marked_time[name]) > ATTENDANCE_COOLDOWN_SECONDS:
+#                                 attendance_records[name] = {'status': 'Present', 'timestamp': datetime.now().isoformat()}
+#                                 last_marked_time[name] = current_time
+
+#                 processed_results.append({"bbox": bbox, "name": name, "score": sim_score, "color": color})
+        
+#         with faces_data_lock:
+#             current_faces_data = processed_results
+#         time.sleep(0.05)
+
+# # --- FLASK ROUTES ---
+
+# @app_flask.route('/students', methods=['GET'])
+# def get_all_students():
+#     """Endpoint for StudentList.js: returns all students from students.json"""
+#     # Force reload from file to ensure we are showing latest registrations
+#     if os.path.exists(STUDENT_DB_FILE):
+#         with open(STUDENT_DB_FILE, 'r') as f:
+#             data = json.load(f)
+#     else:
+#         data = {}
+    
+#     student_list = []
+#     for reg_no, info in data.items():
+#         student_list.append({
+#             "register_no": reg_no,
+#             "name": info.get("name", "N/A"),
+#             "roll_no": info.get("roll_no", "N/A"),
+#             "section": info.get("section", "N/A"),
+#             "email": info.get("email", "N/A")
+#         })
+#     return jsonify(student_list)
+
+# @app_flask.route('/video_feed')
+# def video_feed():
+#     def generate():
+#         while True:
+#             frame = None
+#             with global_frame_lock:
+#                 if global_frame is not None: frame = global_frame.copy()
+#             if frame is None: continue
+            
+#             with faces_data_lock:
+#                 for data in current_faces_data:
+#                     x1, y1, x2, y2 = data["bbox"]
+#                     cv2.rectangle(frame, (x1, y1), (x2, y2), data["color"], 2)
+#                     label = f"{data['name']} ({int(data['score']*100)}%)" if data['name'] != "Unknown" else "Unknown"
+#                     cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, data["color"], 2)
+
+#             ret, buffer = cv2.imencode('.jpg', frame)
+#             yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+#             time.sleep(0.03)
+#     return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+# @app_flask.route('/register_camera_frame')
+# def get_register_camera_frame():
+#     frame = None
+#     with global_frame_lock:
+#         if global_frame is not None: frame = global_frame.copy()
+#     if frame is None: return jsonify({"error": "Loading..."}), 503
+#     ret, buffer = cv2.imencode('.jpg', frame)
+#     return jsonify({"content": base64.b64encode(buffer).decode('utf-8')})
+
+# @app_flask.route('/register', methods=['POST'])
+# def register_student():
+#     """Endpoint for RegisterStudent.js: saves image and updates students.json"""
+#     global registered_reg_nos, registered_embedding_vectors
+    
+#     if 'image' not in request.files: return jsonify({"status": "error", "message": "No image uploaded"}), 400
+    
+#     file = request.files['image']
+#     reg_no = request.form.get('reg_no')
+#     name = request.form.get('name')
+    
+#     if not reg_no or not name: return jsonify({"status": "error", "message": "Missing details"}), 400
+
+#     # 1. Save Image
+#     if not os.path.exists(REGISTERED_FACES_DIR): os.makedirs(REGISTERED_FACES_DIR)
+#     path = os.path.join(REGISTERED_FACES_DIR, f"{reg_no}.jpg")
+#     file.save(path)
+    
+#     # 2. Extract Embedding
+#     img = cv2.imread(path)
+#     faces = app.get(img)
+#     if not faces:
+#         os.remove(path)
+#         return jsonify({"status": "error", "message": "No face detected in photo"}), 400
+    
+#     faces.sort(key=lambda x: (x.bbox[2]-x.bbox[0])*(x.bbox[3]-x.bbox[1]), reverse=True)
+#     embedding = faces[0].embedding
+#     norm = np.linalg.norm(embedding)
+#     if norm > 0: embedding = embedding / norm
+
+#     # 3. Update JSON Database
+#     student_db[reg_no] = {
+#         "name": name,
+#         "email": request.form.get('email'),
+#         "roll_no": request.form.get('roll_no'),
+#         "section": request.form.get('section')
+#     }
+#     save_student_db()
+
+#     # 4. Update Memory for Real-time recognition
+#     with embeddings_lock:
+#         registered_embeddings[reg_no] = embedding
+#         registered_reg_nos = list(registered_embeddings.keys())
+#         registered_embedding_vectors = np.array(list(registered_embeddings.values()))
+#         with open(EMBEDDINGS_FILE, "wb") as f: 
+#             pickle.dump(registered_embeddings, f)
+            
+#     return jsonify({"status": "success", "message": f"Successfully registered {name}!"})
+
+# @app_flask.route('/attendance_data')
+# def get_attendance_data():
+#     return jsonify(attendance_records)
+
+# # --- START SERVER ---
+# if __name__ == '__main__':
+#     t_cap = threading.Thread(target=capture_thread_func, daemon=True)
+#     t_cap.start()
+#     t_ai = threading.Thread(target=processing_thread_func, daemon=True)
+#     t_ai.start()
+    
+#     print(f"🌐 Server running at http://{FLASK_HOST}:{FLASK_PORT}")
+#     app_flask.run(host=FLASK_HOST, port=FLASK_PORT, threaded=True, debug=False)
+
+
+
+
+
+
+
+
+# import cv2
+# import pickle
+# import numpy as np
+# from insightface.app import FaceAnalysis
+# import time
+# import os
+# import json
+# from datetime import datetime
+# from flask import Flask, Response, jsonify, request
+# from flask_cors import CORS
+# import threading
+# import base64
+# import smtplib
+# from email.mime.text import MIMEText
+# from email.mime.multipart import MIMEMultipart
+
+# # --- INITIALIZE FLASK & CORS ---
+# app_flask = Flask(__name__)
+# CORS(app_flask, resources={r"/*": {"origins": "*"}})
+
+# print("🔹 Starting Live Attendance Monitoring Backend...")
+
+# # --- EMAIL CONFIGURATION ---
+# SMTP_SERVER = "smtp.gmail.com"
+# SMTP_PORT = 587
+# SENDER_EMAIL = "dsr.lovely.professional@gmail.com"
+# SENDER_PASSWORD = "ysfm jnue jldj kdyv" 
+
+# # --- CONFIGURATION & PATHS ---
+# CAMERA_URL = "http://10.4.90.205:8080/video"
+# REGISTERED_FACES_DIR = "registered_faces"
+# EMBEDDINGS_FILE = "embeddings.pkl"
+# ATTENDANCE_LOG_FILE = "attendance_log.json"
+# STUDENT_DB_FILE = "students.json"
+
+# # --- TUNING ---
+# SIMILARITY_THRESHOLD = 0.60  
+# MIN_FACE_SIZE = 80 
+# ATTENDANCE_COOLDOWN_SECONDS = 30 
+# FLASK_HOST = '0.0.0.0'
+# FLASK_PORT = 5000
+
+# # --- GLOBAL STATE ---
+# attendance_records = {} 
+# last_marked_time = {} 
+# global_frame = None
+# global_frame_lock = threading.Lock()
+# current_faces_data = [] 
+# faces_data_lock = threading.Lock()
+# student_db = {}
+# registered_embeddings = {}
+# registered_reg_nos = []
+# registered_embedding_vectors = np.array([])
+# embeddings_lock = threading.Lock()
+
+# # --- INSIGHTFACE INITIALIZATION ---
+# try:
+#     app = FaceAnalysis(name='buffalo_l', providers=['CUDAExecutionProvider', 'CPUExecutionProvider'])
+#     app.prepare(ctx_id=0, det_size=(640, 640)) 
+#     print("✅ InsightFace model loaded successfully.")
+# except Exception as e:
+#     print(f"❌ Error initializing InsightFace: {e}")
+#     exit()
+
+# # --- DATA MANAGEMENT ---
+# def load_data():
+#     global registered_embeddings, registered_reg_nos, registered_embedding_vectors, student_db
+#     if os.path.exists(STUDENT_DB_FILE):
+#         try:
+#             with open(STUDENT_DB_FILE, 'r') as f:
+#                 student_db = json.load(f)
+#             print(f"✅ Loaded {len(student_db)} student records.")
+#         except: pass
+
+#     with embeddings_lock:
+#         if os.path.exists(EMBEDDINGS_FILE):
+#             try:
+#                 with open(EMBEDDINGS_FILE, "rb") as f:
+#                     data = pickle.load(f)
+#                     if isinstance(data, dict):
+#                         registered_embeddings = data
+#                         registered_reg_nos = list(data.keys())
+#                         registered_embedding_vectors = np.array(list(data.values()))
+#                         if registered_embedding_vectors.size > 0:
+#                             norms = np.linalg.norm(registered_embedding_vectors, axis=1, keepdims=True)
+#                             registered_embedding_vectors = registered_embedding_vectors / norms
+#                         print(f"✅ Loaded {len(data)} student embeddings.")
+#             except: pass
+
+# def save_student_db():
+#     with open(STUDENT_DB_FILE, 'w') as f:
+#         json.dump(student_db, f, indent=4)
+
+# load_data()
+
+# # --- BACKGROUND THREADS ---
+# def capture_thread_func():
+#     global global_frame
+#     cap = cv2.VideoCapture(CAMERA_URL)
+#     while True:
+#         ret, frame = cap.read()
+#         if not ret:
+#             time.sleep(2)
+#             cap = cv2.VideoCapture(CAMERA_URL)
+#             continue
+#         with global_frame_lock:
+#             global_frame = frame.copy()
+#         time.sleep(0.01)
+
+# def processing_thread_func():
+#     global current_faces_data, attendance_records, last_marked_time
+#     while True:
+#         frame_to_process = None
+#         with global_frame_lock:
+#             if global_frame is not None: frame_to_process = global_frame.copy()
+        
+#         if frame_to_process is None:
+#             time.sleep(0.1)
+#             continue
+
+#         faces = app.get(frame_to_process)
+#         processed_results = []
+#         current_time = time.time()
+        
+#         if faces:
+#             for face in faces:
+#                 bbox = face.bbox.astype(int)
+#                 if (bbox[2]-bbox[0]) < MIN_FACE_SIZE: continue
+#                 embedding = face.embedding
+#                 norm = np.linalg.norm(embedding)
+#                 if norm > 0: embedding = embedding / norm
+
+#                 name, color, sim_score = "Unknown", (0, 0, 255), 0.0
+#                 with embeddings_lock:
+#                     if registered_embedding_vectors.size > 0:
+#                         similarities = np.dot(registered_embedding_vectors, embedding)
+#                         best_idx = np.argmax(similarities)
+#                         if similarities[best_idx] > SIMILARITY_THRESHOLD:
+#                             name = registered_reg_nos[best_idx]
+#                             sim_score = similarities[best_idx]
+#                             color = (0, 255, 0)
+#                             if name not in last_marked_time or (current_time - last_marked_time[name]) > ATTENDANCE_COOLDOWN_SECONDS:
+#                                 attendance_records[name] = {'status': 'Present', 'timestamp': datetime.now().isoformat()}
+#                                 last_marked_time[name] = current_time
+
+#                 processed_results.append({"bbox": bbox, "name": name, "score": sim_score, "color": color})
+        
+#         with faces_data_lock:
+#             current_faces_data = processed_results
+#         time.sleep(0.05)
+
+# # --- FLASK ROUTES ---
+
+# @app_flask.route('/video_feed')
+# def video_feed():
+#     """Live feed WITH detection boxes for Attendance Page"""
+#     def generate():
+#         while True:
+#             frame = None
+#             with global_frame_lock:
+#                 if global_frame is not None: frame = global_frame.copy()
+#             if frame is None: continue
+#             with faces_data_lock:
+#                 for data in current_faces_data:
+#                     x1, y1, x2, y2 = data["bbox"]
+#                     cv2.rectangle(frame, (x1, y1), (x2, y2), data["color"], 2)
+#                     label = f"{data['name']} ({int(data['score']*100)}%)" if data['name'] != "Unknown" else "Unknown"
+#                     cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, data["color"], 2)
+#             ret, buffer = cv2.imencode('.jpg', frame)
+#             yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+#             time.sleep(0.03)
+#     return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+# @app_flask.route('/video_feed_clean')
+# def video_feed_clean():
+#     """Live feed WITHOUT detection boxes for Registration Page"""
+#     def generate():
+#         while True:
+#             frame = None
+#             with global_frame_lock:
+#                 if global_frame is not None: frame = global_frame.copy()
+#             if frame is None: continue
+#             # No drawing logic here
+#             ret, buffer = cv2.imencode('.jpg', frame)
+#             yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+#             time.sleep(0.03)
+#     return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+# @app_flask.route('/students', methods=['GET'])
+# def get_all_students():
+#     if os.path.exists(STUDENT_DB_FILE):
+#         with open(STUDENT_DB_FILE, 'r') as f: data = json.load(f)
+#     else: data = {}
+#     student_list = [{"register_no": k, **v} for k, v in data.items()]
+#     return jsonify(student_list)
+
+# @app_flask.route('/register_camera_frame')
+# def get_register_camera_frame():
+#     frame = None
+#     with global_frame_lock:
+#         if global_frame is not None: frame = global_frame.copy()
+#     if frame is None: return jsonify({"error": "Loading..."}), 503
+#     ret, buffer = cv2.imencode('.jpg', frame)
+#     return jsonify({"content": base64.b64encode(buffer).decode('utf-8')})
+
+# @app_flask.route('/register', methods=['POST'])
+# def register_student():
+#     global registered_reg_nos, registered_embedding_vectors
+#     if 'image' not in request.files: return jsonify({"status": "error", "message": "No image"}), 400
+#     file = request.files['image']
+#     reg_no, name = request.form.get('reg_no'), request.form.get('name')
+#     if not os.path.exists(REGISTERED_FACES_DIR): os.makedirs(REGISTERED_FACES_DIR)
+#     path = os.path.join(REGISTERED_FACES_DIR, f"{reg_no}.jpg")
+#     file.save(path)
+#     img = cv2.imread(path)
+#     faces = app.get(img)
+#     if not faces:
+#         os.remove(path)
+#         return jsonify({"status": "error", "message": "No face detected"}), 400
+#     faces.sort(key=lambda x: (x.bbox[2]-x.bbox[0])*(x.bbox[3]-x.bbox[1]), reverse=True)
+#     embedding = faces[0].embedding
+#     norm = np.linalg.norm(embedding)
+#     if norm > 0: embedding = embedding / norm
+#     student_db[reg_no] = {"name": name, "email": request.form.get('email'), "roll_no": request.form.get('roll_no'), "section": request.form.get('section')}
+#     save_student_db()
+#     with embeddings_lock:
+#         registered_embeddings[reg_no] = embedding
+#         registered_reg_nos = list(registered_embeddings.keys())
+#         registered_embedding_vectors = np.array(list(registered_embeddings.values()))
+#         with open(EMBEDDINGS_FILE, "wb") as f: pickle.dump(registered_embeddings, f)
+#     return jsonify({"status": "success", "message": f"Registered {name}!"})
+
+# @app_flask.route('/attendance_data')
+# def get_attendance_data(): return jsonify(attendance_records)
+
+# if __name__ == '__main__':
+#     threading.Thread(target=capture_thread_func, daemon=True).start()
+#     threading.Thread(target=processing_thread_func, daemon=True).start()
+#     app_flask.run(host=FLASK_HOST, port=FLASK_PORT, threaded=True, debug=False)
+
+
+
+
+
+
 
 
 import cv2
@@ -1191,40 +974,53 @@ from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
 import threading
 import base64
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
+# --- INITIALIZE FLASK & CORS ---
+app_flask = Flask(__name__)
+# Crucial for React to communicate with Python
+CORS(app_flask, resources={r"/*": {"origins": "*"}})
 
 print("🔹 Starting Live Attendance Monitoring Backend...")
 
-# --- Configuration ---
-CAMERA_URL = "http://10.174.115.216:8080/video"
+# --- EMAIL CONFIGURATION ---
+SMTP_SERVER = "smtp.gmail.com"
+SMTP_PORT = 587
+SENDER_EMAIL = "dsr.lovely.professional@gmail.com"
+SENDER_PASSWORD = "ysfm jnue jldj kdyv"  # Must be a 16-char Google App Password
+
+# --- CONFIGURATION & PATHS ---
+CAMERA_URL = "http://10.4.90.205:8080/video"
 REGISTERED_FACES_DIR = "registered_faces"
 EMBEDDINGS_FILE = "embeddings.pkl"
 ATTENDANCE_LOG_FILE = "attendance_log.json"
+STUDENT_DB_FILE = "students.json"
 
-# --- TUNING PARAMETERS (CRITICAL) ---
-# SIMILARITY_THRESHOLD: 
-# 0.50 = Loose (Easy match, potential false positives)
-# 0.60 = Strict (Good for attendance)
-# 0.70 = Very Strict (Might not recognize you if lighting changes)
+# --- TUNING ---
 SIMILARITY_THRESHOLD = 0.60  
-
 MIN_FACE_SIZE = 80 
 ATTENDANCE_COOLDOWN_SECONDS = 30 
 FLASK_HOST = '0.0.0.0'
 FLASK_PORT = 5000
 
-# --- Global Variables ---
+# --- GLOBAL STATE ---
 attendance_records = {} 
 last_marked_time = {} 
-
-# -- Shared State for Threading --
 global_frame = None
 global_frame_lock = threading.Lock()
-
 current_faces_data = [] 
 faces_data_lock = threading.Lock()
+student_db = {}
+registered_embeddings = {}
+registered_reg_nos = []
+registered_embedding_vectors = np.array([])
+embeddings_lock = threading.Lock()
 
-# --- InsightFace Initialization ---
+# --- INSIGHTFACE INITIALIZATION ---
 try:
+    # Use ctx_id=0 for GPU (CUDA), -1 for CPU
     app = FaceAnalysis(name='buffalo_l', providers=['CUDAExecutionProvider', 'CPUExecutionProvider'])
     app.prepare(ctx_id=0, det_size=(640, 640)) 
     print("✅ InsightFace model loaded successfully.")
@@ -1232,14 +1028,19 @@ except Exception as e:
     print(f"❌ Error initializing InsightFace: {e}")
     exit()
 
-# --- Embeddings Management ---
-registered_embeddings = {}
-registered_reg_nos = []
-registered_embedding_vectors = np.array([])
-embeddings_lock = threading.Lock()
+# --- DATA MANAGEMENT ---
+def load_data():
+    global registered_embeddings, registered_reg_nos, registered_embedding_vectors, student_db
+    
+    # Load Student MetaData (Name, Email, etc.)
+    if os.path.exists(STUDENT_DB_FILE):
+        try:
+            with open(STUDENT_DB_FILE, 'r') as f:
+                student_db = json.load(f)
+            print(f"✅ Loaded {len(student_db)} student records from JSON.")
+        except: pass
 
-def load_registered_embeddings():
-    global registered_embeddings, registered_reg_nos, registered_embedding_vectors
+    # Load Face Embeddings (Binary data)
     with embeddings_lock:
         if os.path.exists(EMBEDDINGS_FILE):
             try:
@@ -1249,65 +1050,71 @@ def load_registered_embeddings():
                         registered_embeddings = data
                         registered_reg_nos = list(data.keys())
                         registered_embedding_vectors = np.array(list(data.values()))
-                        
-                        # CRITICAL: Ensure loaded embeddings are normalized
-                        # This handles cases where old embeddings might not be normalized
                         if registered_embedding_vectors.size > 0:
+                            # Normalize vectors for faster cosine similarity via dot product
                             norms = np.linalg.norm(registered_embedding_vectors, axis=1, keepdims=True)
                             registered_embedding_vectors = registered_embedding_vectors / norms
+                        print(f"✅ Loaded {len(data)} student embeddings.")
+            except: pass
 
-                        print(f"✅ Loaded {len(data)} students.")
-                    else:
-                        print("❌ Embeddings file corrupted.")
-            except Exception as e:
-                print(f"❌ Error loading embeddings: {e}")
+def save_student_db():
+    with open(STUDENT_DB_FILE, 'w') as f:
+        json.dump(student_db, f, indent=4)
 
-load_registered_embeddings()
+load_data()
 
-# --- Attendance Logic ---
-def load_attendance_log():
-    global attendance_records
-    if os.path.exists(ATTENDANCE_LOG_FILE):
-        try:
-            with open(ATTENDANCE_LOG_FILE, 'r') as f:
-                attendance_records = json.load(f)
-        except:
-            pass
+# --- EMAIL LOGIC ---
+def send_email_thread(absent_students):
+    """Background thread to send emails without freezing the app"""
+    print(f"📧 Starting email broadcast to {len(absent_students)} absentees...")
+    try:
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        server.starttls()
+        server.login(SENDER_EMAIL, SENDER_PASSWORD)
+        
+        for student in absent_students:
+            email = student.get('email')
+            name = student.get('name')
+            reg_no = student.get('reg_no')
 
-def save_attendance_log():
-    with open(ATTENDANCE_LOG_FILE, 'w') as f:
-        json.dump(attendance_records, f, indent=4)
+            if not email or "@" not in email:
+                continue
 
-load_attendance_log()
+            msg = MIMEMultipart()
+            msg['From'] = SENDER_EMAIL
+            msg['To'] = email
+            msg['Subject'] = f"Absence Alert: {name} ({reg_no})"
 
-# --- THREAD 1: Camera Capture ---
+            body = f"Dear Parent,\n\nThis is to notify you that your ward, {name} (Reg No: {reg_no}), was marked ABSENT for the class session on {datetime.now().strftime('%Y-%m-%d')}.\n\nRegards,\nAttendance System"
+            msg.attach(MIMEText(body, 'plain'))
+            server.send_message(msg)
+            print(f"📤 Sent: {email}")
+
+        server.quit()
+        print("✅ Email notification session complete.")
+    except Exception as e:
+        print(f"❌ SMTP Error: {e}")
+
+# --- BACKGROUND THREADS ---
 def capture_thread_func():
     global global_frame
     cap = cv2.VideoCapture(CAMERA_URL)
-    print("🟢 [Capture Thread] Stream started.")
     while True:
         ret, frame = cap.read()
         if not ret:
-            print("❌ Camera disconnected, retrying...")
-            cap.release()
             time.sleep(2)
             cap = cv2.VideoCapture(CAMERA_URL)
             continue
-        
         with global_frame_lock:
             global_frame = frame.copy()
         time.sleep(0.01)
 
-# --- THREAD 2: AI Processing ---
 def processing_thread_func():
     global current_faces_data, attendance_records, last_marked_time
-    print("🧠 [AI Thread] Detection logic started.")
-    
     while True:
         frame_to_process = None
         with global_frame_lock:
-            if global_frame is not None:
-                frame_to_process = global_frame.copy()
+            if global_frame is not None: frame_to_process = global_frame.copy()
         
         if frame_to_process is None:
             time.sleep(0.1)
@@ -1320,130 +1127,124 @@ def processing_thread_func():
         if faces:
             for face in faces:
                 bbox = face.bbox.astype(int)
+                if (bbox[2]-bbox[0]) < MIN_FACE_SIZE: continue
                 
-                # Filter Small Faces
-                face_w = bbox[2] - bbox[0]
-                face_h = bbox[3] - bbox[1]
-                if face_w < MIN_FACE_SIZE: continue
-
-                # CRITICAL: Normalize Live Embedding
                 embedding = face.embedding
                 norm = np.linalg.norm(embedding)
-                if norm > 0:
-                    embedding = embedding / norm
+                if norm > 0: embedding = embedding / norm
 
-                name = "Unknown"
-                color = (0, 0, 255) # Red
-                sim_score = 0.0
-
+                name, color, sim_score = "Unknown", (0, 0, 255), 0.0
                 with embeddings_lock:
                     if registered_embedding_vectors.size > 0:
-                        # Dot product of normalized vectors = Cosine Similarity
                         similarities = np.dot(registered_embedding_vectors, embedding)
                         best_idx = np.argmax(similarities)
-                        best_sim = similarities[best_idx]
-                        
-                        # Check Similarity Threshold (Higher is better)
-                        if best_sim > SIMILARITY_THRESHOLD:
-                            matched_reg = registered_reg_nos[best_idx]
-                            name = matched_reg
-                            sim_score = best_sim
-                            color = (0, 255, 0) # Green
+                        if similarities[best_idx] > SIMILARITY_THRESHOLD:
+                            name = registered_reg_nos[best_idx]
+                            sim_score = similarities[best_idx]
+                            color = (0, 255, 0)
                             
-                            if matched_reg not in last_marked_time or \
-                               (current_time - last_marked_time[matched_reg]) > ATTENDANCE_COOLDOWN_SECONDS:
-                                
-                                attendance_records[matched_reg] = {
-                                    'status': 'Present',
-                                    'timestamp': datetime.now().isoformat()
-                                }
-                                last_marked_time[matched_reg] = current_time
-                                save_attendance_log()
-                                print(f"✅ Marked: {matched_reg} (Score: {best_sim:.2f})")
+                            # Update Attendance Records
+                            if name not in last_marked_time or (current_time - last_marked_time[name]) > ATTENDANCE_COOLDOWN_SECONDS:
+                                attendance_records[name] = {'status': 'Present', 'timestamp': datetime.now().isoformat()}
+                                last_marked_time[name] = current_time
 
-                processed_results.append({
-                    "bbox": bbox,
-                    "name": name,
-                    "score": sim_score,
-                    "color": color
-                })
-
+                processed_results.append({"bbox": bbox, "name": name, "score": sim_score, "color": color})
+        
         with faces_data_lock:
             current_faces_data = processed_results
-        
-        time.sleep(0.05) 
+        time.sleep(0.05)
 
-# --- Flask App ---
-app_flask = Flask(__name__)
-CORS(app_flask)
-
-def generate_video_stream():
-    while True:
-        frame = None
-        with global_frame_lock:
-            if global_frame is not None:
-                frame = global_frame.copy()
-        
-        if frame is None:
-            time.sleep(0.1)
-            continue
-
-        local_faces_data = []
-        with faces_data_lock:
-            local_faces_data = current_faces_data 
-
-        for data in local_faces_data:
-            x1, y1, x2, y2 = data["bbox"]
-            cv2.rectangle(frame, (x1, y1), (x2, y2), data["color"], 2)
-            
-            # Show Name and Score on Video
-            label = f"{data['name']}"
-            if data['name'] != "Unknown":
-                label += f" ({int(data['score']*100)}%)"
-            
-            cv2.putText(frame, label, (x1, y1 - 10), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, data["color"], 2)
-
-        ret, buffer = cv2.imencode('.jpg', frame)
-        if not ret: continue
-        yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
-        time.sleep(0.03)
+# --- FLASK ROUTES ---
 
 @app_flask.route('/video_feed')
 def video_feed():
-    return Response(generate_video_stream(), mimetype='multipart/x-mixed-replace; boundary=frame')
+    """Live stream with Boxes (For Live Attendance Page)"""
+    def generate():
+        while True:
+            frame = None
+            with global_frame_lock:
+                if global_frame is not None: frame = global_frame.copy()
+            if frame is None: continue
+            with faces_data_lock:
+                for data in current_faces_data:
+                    x1, y1, x2, y2 = data["bbox"]
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), data["color"], 2)
+                    label = f"{data['name']} ({int(data['score']*100)}%)" if data['name'] != "Unknown" else "Unknown"
+                    cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, data["color"], 2)
+            ret, buffer = cv2.imencode('.jpg', frame)
+            yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+            time.sleep(0.03)
+    return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@app_flask.route('/video_feed_clean')
+def video_feed_clean():
+    """Live stream WITHOUT Boxes (For Registration Page)"""
+    def generate():
+        while True:
+            frame = None
+            with global_frame_lock:
+                if global_frame is not None: frame = global_frame.copy()
+            if frame is None: continue
+            ret, buffer = cv2.imencode('.jpg', frame)
+            yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+            time.sleep(0.03)
+    return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@app_flask.route('/students', methods=['GET'])
+def get_all_students():
+    student_list = [{"register_no": k, **v} for k, v in student_db.items()]
+    return jsonify(student_list)
 
 @app_flask.route('/attendance_data')
-def get_attendance_data():
+def get_attendance_data(): 
     return jsonify(attendance_records)
 
 @app_flask.route('/reset_attendance', methods=['POST'])
 def reset_attendance():
+    """Clears current attendance session from memory and log"""
     global attendance_records, last_marked_time
-    attendance_records = {}
-    last_marked_time = {}
-    save_attendance_log()
-    return jsonify({"status": "success", "message": "Cleared."})
+    try:
+        attendance_records.clear()
+        last_marked_time.clear()
+        print("🗑️ Attendance list reset.")
+        return jsonify({"status": "success", "message": "Attendance list reset."})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
-@app_flask.route('/register_camera_frame')
-def get_register_camera_frame():
-    frame = None
-    with global_frame_lock:
-        if global_frame is not None: frame = global_frame.copy()
-    if frame is None: return jsonify({"error": "Loading..."}), 503
-    ret, buffer = cv2.imencode('.jpg', frame)
-    return jsonify({"content": base64.b64encode(buffer).decode('utf-8')})
+@app_flask.route('/end_session_notify', methods=['POST'])
+def end_session_notify():
+    """Identifies absentees and triggers email thread"""
+    global attendance_records, student_db
+    try:
+        present_ids = attendance_records.keys()
+        absent_students = []
+
+        for reg_no, info in student_db.items():
+            if reg_no not in present_ids:
+                data = info.copy()
+                data['reg_no'] = reg_no
+                absent_students.append(data)
+
+        if not absent_students:
+            return jsonify({"status": "success", "message": "Everyone is present."})
+
+        # Start thread
+        threading.Thread(target=send_email_thread, args=(absent_students,), daemon=True).start()
+        
+        return jsonify({"status": "success", "message": f"Session ended. {len(absent_students)} emails triggered."})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app_flask.route('/register', methods=['POST'])
 def register_student():
-    if 'image' not in request.files: return jsonify({"status": "error"}), 400
+    """Saves student image, info, and embedding"""
+    global registered_reg_nos, registered_embedding_vectors
+    if 'image' not in request.files: return jsonify({"status": "error", "message": "No image"}), 400
     file = request.files['image']
-    reg_no = request.form.get('reg_no')
-    name = request.form.get('name')
-
+    reg_no, name = request.form.get('reg_no'), request.form.get('name')
+    
     if not os.path.exists(REGISTERED_FACES_DIR): os.makedirs(REGISTERED_FACES_DIR)
-    filename = f"{reg_no}_{datetime.now().strftime('%Y%m%d%H%M%S')}.jpg"
-    path = os.path.join(REGISTERED_FACES_DIR, filename)
+    path = os.path.join(REGISTERED_FACES_DIR, f"{reg_no}.jpg")
     file.save(path)
     
     img = cv2.imread(path)
@@ -1452,26 +1253,42 @@ def register_student():
         os.remove(path)
         return jsonify({"status": "error", "message": "No face detected"}), 400
     
-    # Register with Normalization
     faces.sort(key=lambda x: (x.bbox[2]-x.bbox[0])*(x.bbox[3]-x.bbox[1]), reverse=True)
     embedding = faces[0].embedding
     norm = np.linalg.norm(embedding)
     if norm > 0: embedding = embedding / norm
-
+    
+    student_db[reg_no] = {
+        "name": name, 
+        "email": request.form.get('email'), 
+        "roll_no": request.form.get('roll_no'), 
+        "section": request.form.get('section')
+    }
+    save_student_db()
+    
     with embeddings_lock:
         registered_embeddings[reg_no] = embedding
-        global registered_reg_nos, registered_embedding_vectors
         registered_reg_nos = list(registered_embeddings.keys())
         registered_embedding_vectors = np.array(list(registered_embeddings.values()))
-        with open(EMBEDDINGS_FILE, "wb") as f:
-            pickle.dump(registered_embeddings, f)
-            
-    return jsonify({"status": "success", "message": f"Registered {name}"})
+        with open(EMBEDDINGS_FILE, "wb") as f: pickle.dump(registered_embeddings, f)
+        
+    return jsonify({"status": "success", "message": f"Registered {name}!"})
+
+@app_flask.route('/register_camera_frame')
+def get_register_camera_frame():
+    """Captures a single frame for registration snapshot"""
+    frame = None
+    with global_frame_lock:
+        if global_frame is not None: frame = global_frame.copy()
+    if frame is None: return jsonify({"error": "Loading..."}), 503
+    ret, buffer = cv2.imencode('.jpg', frame)
+    return jsonify({"content": base64.b64encode(buffer).decode('utf-8')})
 
 if __name__ == '__main__':
-    t_cap = threading.Thread(target=capture_thread_func, daemon=True)
-    t_cap.start()
-    t_ai = threading.Thread(target=processing_thread_func, daemon=True)
-    t_ai.start()
+    # Start Background Threads
+    threading.Thread(target=capture_thread_func, daemon=True).start()
+    threading.Thread(target=processing_thread_func, daemon=True).start()
+    
+    # Run Flask
     print(f"🌐 Server running at http://{FLASK_HOST}:{FLASK_PORT}")
     app_flask.run(host=FLASK_HOST, port=FLASK_PORT, threaded=True, debug=False)

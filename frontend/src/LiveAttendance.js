@@ -1,86 +1,4 @@
 // import React, { useState, useEffect } from 'react';
-// import './LiveAttendance.css'; // You might want to create a CSS file for styling
-
-// function LiveAttendance() {
-//   const [attendance, setAttendance] = useState({});
-//   const [error, setError] = useState(null);
-//   const [loading, setLoading] = useState(true);
-
-//   // Configuration for your backend
-//   const BACKEND_URL = 'http://localhost:5000'; // Make sure this matches your main.py Flask host and port
-
-//   useEffect(() => {
-//     const fetchAttendance = async () => {
-//       try {
-//         const response = await fetch(`${BACKEND_URL}/attendance_data`);
-//         if (!response.ok) {
-//           throw new Error(`HTTP error! status: ${response.status}`);
-//         }
-//         const data = await response.json();
-//         setAttendance(data);
-//         setError(null); // Clear any previous errors
-//       } catch (e) {
-//         console.error("Failed to fetch attendance data:", e);
-//         setError("Failed to load attendance data. Is the backend running?");
-//       } finally {
-//         setLoading(false);
-//       }
-//     };
-
-//     // Fetch initially
-//     fetchAttendance();
-
-//     // Set up polling for attendance data
-//     const intervalId = setInterval(fetchAttendance, 3000); // Poll every 3 seconds
-
-//     // Cleanup function
-//     return () => clearInterval(intervalId);
-//   }, []); // Empty dependency array means this runs once on mount and cleans up on unmount
-
-//   return (
-//     <div className="live-attendance-container">
-//       <h1>Live Class Attendance Monitoring</h1>
-
-//       <div className="video-section">
-//         <h2>Live Camera Feed</h2>
-//         {error && <p className="error-message">{error}</p>}
-//         {/* The src attribute points directly to the MJPEG stream from your Flask backend */}
-//         <img
-//           src={`${BACKEND_URL}/video_feed`}
-//           alt="Live Camera Feed"
-//           className="live-video-feed"
-//           onError={(e) => {
-//             e.target.onerror = null; // Prevent infinite loop
-//             setError("Failed to load video feed. Is the backend running and camera active?");
-//           }}
-//         />
-//       </div>
-
-//       <div className="attendance-section">
-//         <h2>Attendance Status</h2>
-//         {loading ? (
-//           <p>Loading attendance data...</p>
-//         ) : Object.keys(attendance).length === 0 ? (
-//           <p>No attendance recorded yet for this session.</p>
-//         ) : (
-//           <ul className="attendance-list">
-//             {Object.entries(attendance).map(([regNo, record]) => (
-//               <li key={regNo} className="attendance-item">
-//                 <strong>{regNo}:</strong> <span className="status-present">{record.status}</span> at {new Date(record.timestamp).toLocaleTimeString()}
-//               </li>
-//             ))}
-//           </ul>
-//         )}
-//       </div>
-//     </div>
-//   );
-// }
-
-// export default LiveAttendance;
-
-
-
-// import React, { useState, useEffect } from 'react';
 // import './LiveAttendance.css'; 
 
 // function LiveAttendance() {
@@ -99,7 +17,6 @@
 //       setError(null);
 //     } catch (e) {
 //       console.error("Failed to fetch attendance data:", e);
-//       // Don't show error on screen constantly if just polling fails once
 //     } finally {
 //       setLoading(false);
 //     }
@@ -111,7 +28,7 @@
 //     return () => clearInterval(intervalId);
 //   }, []);
 
-//   // --- NEW: Function to handle Reset ---
+//   // --- Reset Function ---
 //   const handleReset = async () => {
 //     if (!window.confirm("Are you sure you want to clear the attendance list? This cannot be undone.")) {
 //       return;
@@ -121,16 +38,21 @@
 //       const response = await fetch(`${BACKEND_URL}/reset_attendance`, {
 //         method: 'POST',
 //       });
+
+//       if (!response.ok) {
+//         throw new Error(`Server returned ${response.status}`);
+//       }
+
 //       const data = await response.json();
       
 //       if (data.status === 'success') {
 //         setAttendance({}); // Clear local state immediately
 //         alert("Attendance list cleared successfully!");
 //       } else {
-//         alert("Failed to reset attendance.");
+//         alert("Failed to reset attendance: " + data.message);
 //       }
 //     } catch (e) {
-//       alert("Error connecting to server.");
+//       alert("Error: " + e.message + "\nPlease check if backend is running.");
 //     }
 //   };
 
@@ -138,7 +60,6 @@
 //     <div className="live-attendance-container">
 //       <div className="header-container" style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
 //           <h1>Live Class Attendance</h1>
-//           {/* --- NEW: Reset Button --- */}
 //           <button 
 //             onClick={handleReset}
 //             style={{
@@ -193,6 +114,110 @@
 // export default LiveAttendance;
 
 
+// import React, { useState, useEffect } from 'react';
+// import './LiveAttendance.css'; 
+
+// function LiveAttendance() {
+//   const [attendance, setAttendance] = useState({});
+//   const [error, setError] = useState(null);
+//   const [loading, setLoading] = useState(true);
+
+//   const BACKEND_URL = 'http://localhost:5000'; 
+
+//   const fetchAttendance = async () => {
+//     try {
+//       const response = await fetch(`${BACKEND_URL}/attendance_data`);
+//       if (!response.ok) throw new Error(`HTTP error!`);
+//       const data = await response.json();
+//       setAttendance(data);
+//       setError(null);
+//     } catch (e) { console.error(e); } finally { setLoading(false); }
+//   };
+
+//   useEffect(() => {
+//     fetchAttendance();
+//     const intervalId = setInterval(fetchAttendance, 3000); 
+//     return () => clearInterval(intervalId);
+//   }, []);
+
+//   const handleReset = async () => {
+//     if (!window.confirm("Are you sure? This clears the list.")) return;
+//     await fetch(`${BACKEND_URL}/reset_attendance`, { method: 'POST' });
+//     setAttendance({});
+//     alert("Attendance list cleared!");
+//   };
+
+//   // --- NEW: End Session & Notify ---
+//   const handleEndSession = async () => {
+//     if (!window.confirm("End session and email parents of absent students?")) return;
+    
+//     try {
+//         const response = await fetch(`${BACKEND_URL}/end_session_notify`, { method: 'POST' });
+//         const data = await response.json();
+//         alert(data.message);
+//     } catch (e) {
+//         alert("Failed to trigger email system.");
+//     }
+//   };
+
+//   return (
+//     <div className="live-attendance-container">
+//       <div className="header-container" style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px'}}>
+//           <h1>Live Class Attendance</h1>
+          
+//           <div>
+//             <button onClick={handleEndSession} style={btnStyle('#FF9800')}>
+//                 End Session & Notify Absentees
+//             </button>
+//             <button onClick={handleReset} style={{...btnStyle('#ff4444'), marginLeft: '10px'}}>
+//                 Reset List
+//             </button>
+//           </div>
+//       </div>
+
+//       <div className="video-section">
+//         <img 
+//           src={`${BACKEND_URL}/video_feed`} 
+//           alt="Live Camera Feed" 
+//           className="live-video-feed" 
+//           onError={(e) => { e.target.onerror = null; setError("Video stream disconnected"); }} 
+//         />
+//       </div>
+
+//       <div className="attendance-section">
+//         <h2>Attendance Status</h2>
+//         {Object.keys(attendance).length === 0 ? <p>No attendance recorded yet.</p> : (
+//           <ul className="attendance-list">
+//             {Object.entries(attendance).map(([regNo, record]) => (
+//               <li key={regNo} className="attendance-item">
+//                 <strong>{regNo}:</strong> 
+//                 <span style={{color: 'green', marginLeft: '10px', fontWeight: 'bold'}}>{record.status}</span> 
+//                 <span style={{marginLeft: 'auto'}}>{new Date(record.timestamp).toLocaleTimeString()}</span>
+//               </li>
+//             ))}
+//           </ul>
+//         )}
+//       </div>
+//     </div>
+//   );
+// }
+
+// const btnStyle = (color) => ({
+//     backgroundColor: color, 
+//     color: 'white', 
+//     padding: '10px 20px', 
+//     border: 'none', 
+//     borderRadius: '5px',
+//     cursor: 'pointer',
+//     fontWeight: 'bold'
+// });
+
+// export default LiveAttendance;
+
+
+
+
+
 import React, { useState, useEffect } from 'react';
 import './LiveAttendance.css'; 
 
@@ -201,19 +226,21 @@ function LiveAttendance() {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const BACKEND_URL = 'http://localhost:5000'; 
+  // Use 127.0.0.1 to avoid common 'localhost' network resolution issues
+  const BACKEND_URL = 'http://127.0.0.1:5000'; 
 
   const fetchAttendance = async () => {
     try {
-      const response = await fetch(`${BACKEND_URL}/attendance_data`);
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      // Added timestamp ?t= to force the browser to get NEW data every time
+      const response = await fetch(`${BACKEND_URL}/attendance_data?t=${Date.now()}`);
+      if (!response.ok) throw new Error(`HTTP error!`);
       const data = await response.json();
       setAttendance(data);
       setError(null);
-    } catch (e) {
-      console.error("Failed to fetch attendance data:", e);
-    } finally {
-      setLoading(false);
+    } catch (e) { 
+      console.error("Fetch Error:", e);
+    } finally { 
+      setLoading(false); 
     }
   };
 
@@ -223,80 +250,72 @@ function LiveAttendance() {
     return () => clearInterval(intervalId);
   }, []);
 
-  // --- Reset Function ---
   const handleReset = async () => {
-    if (!window.confirm("Are you sure you want to clear the attendance list? This cannot be undone.")) {
-      return;
-    }
-
+    if (!window.confirm("Are you sure? This will clear all current attendance.")) return;
+    
     try {
-      const response = await fetch(`${BACKEND_URL}/reset_attendance`, {
-        method: 'POST',
-      });
+        const response = await fetch(`${BACKEND_URL}/reset_attendance`, { method: 'POST' });
+        const data = await response.json();
+        if (data.status === 'success') {
+            setAttendance({});
+            alert("Attendance list cleared!");
+        }
+    } catch (err) {
+        alert("Reset failed: Could not connect to server.");
+    }
+  };
 
-      if (!response.ok) {
-        throw new Error(`Server returned ${response.status}`);
-      }
-
-      const data = await response.json();
-      
-      if (data.status === 'success') {
-        setAttendance({}); // Clear local state immediately
-        alert("Attendance list cleared successfully!");
-      } else {
-        alert("Failed to reset attendance: " + data.message);
-      }
+  const handleEndSession = async () => {
+    if (!window.confirm("End session and email parents of absent students?")) return;
+    
+    try {
+        const response = await fetch(`${BACKEND_URL}/end_session_notify`, { method: 'POST' });
+        const data = await response.json();
+        
+        if (response.ok) {
+            alert(data.message);
+        } else {
+            alert("Server Error: " + (data.message || "Unknown error"));
+        }
     } catch (e) {
-      alert("Error: " + e.message + "\nPlease check if backend is running.");
+        alert("Failed to trigger email system. Check if Backend is running.");
     }
   };
 
   return (
-    <div className="live-attendance-container">
-      <div className="header-container" style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-          <h1>Live Class Attendance</h1>
-          <button 
-            onClick={handleReset}
-            style={{
-              backgroundColor: '#ff4444', 
-              color: 'white', 
-              padding: '10px 20px', 
-              border: 'none', 
-              borderRadius: '5px',
-              cursor: 'pointer',
-              fontWeight: 'bold'
-            }}
-          >
-            Reset Attendance
-          </button>
+    <div className="live-attendance-container" style={{ backgroundColor: '#1a1a1a', color: 'white', minHeight: '100vh', padding: '20px' }}>
+      <div className="header-container" style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px'}}>
+          <h1 style={{ margin: 0 }}>Live Class Attendance</h1>
+          
+          <div>
+            <button onClick={handleEndSession} style={btnStyle('#FF9800')}>
+                End Session & Notify Absentees
+            </button>
+            <button onClick={handleReset} style={{...btnStyle('#ff4444'), marginLeft: '10px'}}>
+                Reset List
+            </button>
+          </div>
       </div>
 
-      <div className="video-section">
+      <div className="video-section" style={{ border: '2px solid #333', borderRadius: '10px', overflow: 'hidden', marginBottom: '20px', backgroundColor: '#000' }}>
         <img 
           src={`${BACKEND_URL}/video_feed`} 
           alt="Live Camera Feed" 
-          className="live-video-feed" 
-          onError={(e) => { e.target.onerror = null; setError("Video stream disconnected"); }} 
+          style={{ width: '100%', display: 'block' }}
+          onError={() => setError("Video stream disconnected")} 
         />
       </div>
 
-      <div className="attendance-section">
-        <h2>Attendance Status</h2>
-        {loading ? (
-          <p>Loading data...</p>
-        ) : Object.keys(attendance).length === 0 ? (
-          <p>No attendance recorded for this session.</p>
+      <div className="attendance-section" style={{ backgroundColor: '#2d2d2d', padding: '20px', borderRadius: '10px' }}>
+        <h2 style={{ borderBottom: '1px solid #444', paddingBottom: '10px' }}>Attendance Status</h2>
+        {Object.keys(attendance).length === 0 ? (
+          <p style={{ color: '#888', fontStyle: 'italic' }}>No attendance recorded yet.</p>
         ) : (
-          <ul className="attendance-list">
+          <ul className="attendance-list" style={{ listStyle: 'none', padding: 0 }}>
             {Object.entries(attendance).map(([regNo, record]) => (
-              <li key={regNo} className="attendance-item">
-                <strong>{regNo}:</strong> 
-                <span className="status-present" style={{color: 'green', marginLeft: '10px'}}>
-                  {record.status}
-                </span> 
-                <span style={{marginLeft: 'auto'}}>
-                    at {new Date(record.timestamp).toLocaleTimeString()}
-                </span>
+              <li key={regNo} className="attendance-item" style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #3d3d3d' }}>
+                <span style={{ fontWeight: 'bold' }}>{regNo}: <span style={{ color: '#4CAF50' }}>Present</span></span> 
+                <span style={{ color: '#aaa' }}>{new Date(record.timestamp).toLocaleTimeString()}</span>
               </li>
             ))}
           </ul>
@@ -306,4 +325,19 @@ function LiveAttendance() {
   );
 }
 
+const btnStyle = (color) => ({
+    backgroundColor: color, 
+    color: 'white', 
+    padding: '12px 24px', 
+    border: 'none', 
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontWeight: 'bold',
+    fontSize: '14px'
+});
+
+
+
 export default LiveAttendance;
+
+

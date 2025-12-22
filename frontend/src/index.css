@@ -1,13 +1,465 @@
+/* index.css */
+
+/* --- Global Theme Variables --- */
+:root {
+  --primary-bg-color: #1e1e1e; /* Dark background, similar to your login page */
+  --secondary-bg-color: #2a2a2a; /* Slightly lighter dark for cards/containers */
+  --sidebar-bg-color: #2b3036; /* Specific dark background for sidebar */
+  --accent-color: #ff8c00; /* Bright orange for buttons, highlights */
+  --text-color-light: #f0f0f0; /* Light text for readability */
+  --text-color-dark: #333; /* Dark text for contrast on light backgrounds */
+  --border-color: #444; /* Darker border for inputs */
+  --input-bg-color: #333; /* Dark background for input fields */
+  --success-color: #4CAF50; /* Green for success */
+  --error-color: #dc3545; /* Red for errors */
+}
+
+/* --- Base Body Styles --- */
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: 'Inter', sans-serif; /* Using a more modern font for example */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background-color: var(--primary-bg-color); /* Apply dark background to the entire body */
+  color: var(--text-color-light); /* Default text color */
+  overflow: hidden; /* Prevent body scroll, content areas will scroll if needed */
 }
 
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
+}
+
+/* --- Base Input and Button Styles --- */
+input[type="text"],
+input[type="email"],
+input[type="number"],
+input[type="password"],
+button {
+  font-family: 'Inter', sans-serif;
+}
+
+/* General button styles */
+button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px; /* Slightly more rounded */
+  cursor: pointer;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+button:hover:not(:disabled) {
+  transform: translateY(-2px);
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Specific button styles */
+.btn-primary {
+  background-color: var(--accent-color);
+  color: white;
+}
+.btn-primary:hover:not(:disabled) {
+  background-color: #e07b00; /* Slightly darker orange on hover */
+}
+
+.btn-success {
+  background-color: var(--success-color);
+  color: white;
+}
+.btn-success:hover:not(:disabled) {
+  background-color: #429f45;
+}
+
+/* --- CORE LAYOUT: App Layout --- */
+.app-layout {
+  display: flex; /* Makes children (Sidebar and Main Content) lay out in a row */
+  min-height: 100vh; /* Ensures the app takes at least the full viewport height */
+  width: 100vw;    /* Ensures the app takes the full viewport width */
+  overflow: hidden; /* Crucial: Prevents main content from creating horizontal scroll */
+}
+
+/* --- Sidebar Container --- */
+.sidebar-container {
+  width: 280px; /* FIXED WIDTH for the sidebar */
+  flex-shrink: 0; /* Prevents sidebar from shrinking if content grows */
+  background-color: var(--sidebar-bg-color); /* Darker sidebar background */
+  color: var(--text-color-light);
+  padding: 20px 0;
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start; /* Pushes bottom icons to the bottom */
+  z-index: 1000;
+  overflow-y: auto; /* Allow sidebar content to scroll independently if it overflows */
+}
+
+/* --- Sidebar Header (Logo Area) --- */
+.sidebar-header {
+  padding: 0 20px 30px 20px; /* Adjust padding around the logo */
+  text-align: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1); /* Subtle separator */
+  margin-bottom: 20px;
+}
+
+.sidebar-logo {
+  max-width: 120px; /* Adjust logo size */
+  height: auto;
+  margin-bottom: 10px;
+}
+
+/* --- Sidebar Navigation --- */
+.sidebar-nav ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.sidebar-nav-item {
+  display: flex; /* Aligns icon and text horizontally */
+  align-items: center;
+  width: calc(100% - 40px); /* Full width minus side padding */
+  padding: 12px 20px;
+  margin: 5px 20px; /* Add margin for spacing between items */
+  background: none;
+  border: none;
+  border-radius: 8px; /* Rounded corners for navigation items */
+  color: var(--text-color-light);
+  font-size: 1.1rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.sidebar-nav-item:hover {
+  background-color: rgba(255, 255, 255, 0.08); /* Light hover effect */
+  color: var(--accent-color); /* Highlight text on hover */
+}
+
+.sidebar-icon {
+  margin-right: 15px;
+  font-size: 1.6rem; /* Bigger icons */
+  color: rgba(255, 255, 255, 0.7); /* Slightly muted icon color */
+  transition: color 0.2s ease;
+}
+
+.sidebar-nav-item:hover .sidebar-icon {
+  color: var(--accent-color); /* Highlight icon on hover */
+}
+
+.sidebar-label {
+  flex-grow: 1; /* Allows label to take available space */
+}
+
+/* --- Sidebar Bottom Icons --- */
+.sidebar-bottom-icons {
+    padding: 20px;
+    display: flex;
+    flex-direction: column; /* Stack icons vertically */
+    align-items: center;
+    gap: 15px; /* Space between bottom icons */
+    border-top: 1px solid rgba(255, 255, 255, 0.1); /* Separator from main nav */
+    margin-top: 20px;
+}
+
+.sidebar-bottom-icon-item {
+    background: none;
+    border: none;
+    color: var(--text-color-light);
+    font-size: 1.8rem; /* Larger icons for bottom bar */
+    cursor: pointer;
+    transition: color 0.2s ease, transform 0.2s ease;
+    padding: 10px; /* Make clickable area larger */
+    border-radius: 50%; /* Optional: round background on hover */
+}
+
+.sidebar-bottom-icon-item:hover {
+    color: var(--accent-color);
+    background-color: rgba(255, 255, 255, 0.08);
+    transform: translateY(-2px);
+}
+
+/* --- Main Content Area --- */
+.main-content-area {
+  flex-grow: 1; /* Takes up all remaining horizontal space */
+  padding: 40px; /* Add padding to the main content */
+  background-color: var(--primary-bg-color); /* Ensure consistent background */
+  color: var(--text-color-light); /* Default text color for content */
+  overflow-y: auto; /* CRUCIAL: Allows main content to scroll independently */
+  -webkit-overflow-scrolling: touch; /* For smoother scrolling on iOS */
+}
+
+/* --- Typography & Overrides for Main Content --- */
+.main-content-area h1,
+.main-content-area h2,
+.main-content-area h3 {
+  color: var(--text-color-light); /* Ensure headings are light */
+}
+
+/* Override existing `text-blue-600` if it's from a utility class not explicitly themed */
+.main-content-area .text-blue-600 {
+  color: var(--accent-color); /* Use accent color for main headings */
+}
+
+/* --- RegisterStudent Component Specific Styles --- */
+.register-student-page {
+  display: flex;
+  justify-content: center;
+  padding: 40px 20px;
+  min-height: calc(100vh - 80px); /* Adjust based on your header/footer height */
+  box-sizing: border-box;
+}
+
+.form-card {
+  background-color: var(--secondary-bg-color);
+  padding: 30px 40px;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  max-width: 700px;
+  width: 100%;
+  text-align: center;
+  color: var(--text-color-light);
+}
+
+.form-title {
+  font-size: 2.2rem;
+  font-weight: 700;
+  color: var(--text-color-light);
+  margin-bottom: 30px;
+  letter-spacing: -0.5px;
+}
+
+.section-title {
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: var(--text-color-light);
+  margin-top: 25px;
+  margin-bottom: 15px;
+}
+
+.error-message {
+  color: var(--error-color);
+  background-color: rgba(220, 53, 69, 0.1);
+  border: 1px solid var(--error-color);
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  font-weight: 500;
+  white-space: pre-wrap;
+}
+
+.loading-message {
+  color: var(--accent-color);
+  font-weight: 500;
+  margin-bottom: 20px;
+}
+
+.camera-section, .captured-image-section, .student-details-section {
+  margin-bottom: 25px;
+}
+
+.live-camera-feed {
+  display: block;
+  width: 100%;
+  max-width: 90vw; /* Increased size to be very big relative to viewport */
+  height: auto;
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  background-color: black;
+  margin: 0 auto 15px auto;
+}
+
+.capture-button, .submit-button {
+  width: auto;
+  margin-top: 15px;
+  padding: 12px 25px;
+  font-size: 1.1rem;
+}
+
+.capture-button {
+  background-color: var(--success-color);
+}
+.capture-button:hover:not(:disabled) {
+  background-color: #429f45;
+}
+
+.captured-image {
+  max-width: 300px;
+  height: auto;
+  border: 2px solid var(--success-color);
+  border-radius: 8px;
+  margin-top: 10px;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.no-image-message {
+  color: var(--text-color-light);
+  opacity: 0.7;
+  font-style: italic;
+  margin-top: 10px;
+}
+
+.input-group {
+  margin-bottom: 15px;
+  text-align: left;
+}
+
+.themed-input {
+  width: calc(100% - 24px);
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background-color: var(--input-bg-color);
+  color: var(--text-color-light);
+  font-size: 1rem;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.themed-input::placeholder {
+  color: var(--text-color-light);
+  opacity: 0.5;
+}
+
+.themed-input:focus {
+  border-color: var(--accent-color);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(255, 140, 0, 0.3);
+}
+
+.submit-button {
+  background-color: var(--accent-color);
+  width: 100%;
+  padding: 15px;
+  font-size: 1.2rem;
+  margin-top: 20px;
+}
+.submit-button:hover:not(:disabled) {
+  background-color: #e07b00;
+}
+
+
+/* --- Table Styling (for Attendance Records) --- */
+.main-content-area table {
+  background-color: var(--secondary-bg-color); /* Darker table background */
+  color: var(--text-color-light);
+  border-collapse: collapse;
+  width: 100%; /* Ensure tables are full width */
+  border-radius: 8px; /* Rounded corners for the table itself */
+  overflow: hidden; /* Ensures rounded corners apply to content */
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2); /* Subtle shadow */
+}
+
+.main-content-area table thead {
+  background-color: #3a3f44; /* Darker header for tables */
+  color: white;
+}
+
+.main-content-area table th {
+  padding: 15px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.main-content-area table td {
+  padding: 12px 15px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.main-content-area table tbody tr:last-child td {
+  border-bottom: none; /* No border on the last row */
+}
+
+.main-content-area table tbody tr:hover {
+  background-color: rgba(255, 255, 255, 0.05); /* Slight hover on table rows */
+}
+
+/* Adjust colors for status spans in attendance records */
+.main-content-area .bg-green-200 {
+  background-color: rgba(76, 175, 80, 0.2); /* Muted green for dark theme */
+  color: var(--success-color);
+}
+.main-content-area .bg-red-200 {
+  background-color: rgba(220, 53, 69, 0.2); /* Muted red for dark theme */
+  color: var(--error-color);
+}
+
+/* Ensure LiveAttendance component styles also integrate */
+/* If you have a separate LiveAttendance.css, these should go there */
+.live-attendance-container {
+  font-family: 'Inter', sans-serif;
+  max-width: 1200px;
+  margin: 20px auto;
+  padding: 20px;
+  background-color: var(--secondary-bg-color); /* Dark theme background */
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  color: var(--text-color-light);
+}
+
+.live-attendance-container h1, .live-attendance-container h2 {
+  color: var(--text-color-light); /* Ensure headings are light */
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.live-attendance-container .video-section, .live-attendance-container .attendance-section {
+  margin-bottom: 30px;
+  padding: 15px;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  background-color: var(--input-bg-color); /* Slightly lighter dark background */
+}
+
+.live-attendance-container .live-video-feed {
+  display: block;
+  width: 100%;
+  max-width: 90vw; /* Make it very big relative to viewport */
+  height: auto;
+  margin: 0 auto;
+  border: 2px solid var(--success-color);
+  border-radius: 5px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+}
+
+.live-attendance-container .attendance-list {
+  list-style-type: none;
+  padding: 0;
+}
+
+.live-attendance-container .attendance-item {
+  background-color: rgba(76, 175, 80, 0.1); /* Muted green background */
+  border: 1px solid var(--success-color);
+  padding: 10px 15px;
+  margin-bottom: 8px;
+  border-radius: 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.live-attendance-container .attendance-item strong {
+  color: var(--success-color);
+}
+
+.live-attendance-container .status-present {
+  font-weight: bold;
+  color: var(--success-color);
+}
+
+.live-attendance-container .error-message {
+  color: var(--error-color);
+  background-color: rgba(220, 53, 69, 0.1);
+  border: 1px solid var(--error-color);
+  padding: 10px;
+  border-radius: 4px;
+  text-align: center;
+  margin-bottom: 15px;
 }
