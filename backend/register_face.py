@@ -1,7 +1,7 @@
 import cv2
 import os
 from datetime import datetime
-import insightface # Make sure you have insightface installed: pip install insightface
+import insightface 
 from insightface.app import FaceAnalysis
 
 print("🔹 Starting face registration script...")
@@ -26,8 +26,8 @@ except Exception as e:
     app = None # Disable live detection feedback if InsightFace fails
 
 # --- Camera Feed Setup ---
-# Ensure this URL is correct and accessible from where you run the script.
-CAMERA_URL = "http://10.4.90.205:8080/video"
+
+CAMERA_URL = "http://10.215.90.242:8080/video"
 print(f"Connecting to camera: {CAMERA_URL}")
 cap = cv2.VideoCapture(CAMERA_URL)
 
@@ -45,8 +45,7 @@ if not reg_no:
     cap.release()
     exit()
 
-# roll_no = input("Enter Roll Number: ") # Not used in this script
-# section = input("Enter Section: ") # Not used in this script
+
 
 print(f"🟢 Starting live preview for student {reg_no} — press 's' to save, 'q' to quit.")
 print("   (Note: Image will only save if a face is detected in the frame.)")
