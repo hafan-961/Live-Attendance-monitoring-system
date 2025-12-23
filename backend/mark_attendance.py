@@ -27,7 +27,7 @@ if not os.path.exists(attendance_file):
     pd.DataFrame(columns=["Register_No", "Join_Time", "Leave_Time", "Duration", "Status"]).to_csv(attendance_file, index=False)
 
 # Camera feed
-url = "http://10.215.90.242:8080/video"  # update with your current phone URL
+url = "http://10.6.192.103:8080/video"  # update with your current phone URL
 
 cap = cv2.VideoCapture(url)
 

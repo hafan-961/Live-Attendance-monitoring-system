@@ -1,7 +1,7 @@
 import cv2
 
 # use your phone's IP address
-url = "http://10.215.90.242:8080/video"
+url = "http://10.6.192.103:8080/video"
 cap = cv2.VideoCapture(url)
 
 while True:
