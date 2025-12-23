@@ -1,16 +1,4 @@
 {
-    "12314792": {
-        "name": "muhammed hafan",
-        "email": "muhammedhafan961@gmail.com",
-        "roll_no": "23",
-        "section": "k23wh"
-    },
-    "12308196": {
-        "name": "atheerth sanil",
-        "email": "atheerthsanilkumar@gmail.com",
-        "roll_no": "19",
-        "section": "k23wh"
-    },
     "12319357": {
         "name": "Sooraj R",
         "email": "soorajr000005@gmail.com",
@@ -22,18 +10,6 @@
         "email": "sdv@gmail.com",
         "roll_no": "24",
         "section": "k23wh"
-    },
-    "9999": {
-        "name": "muhammed hafan",
-        "email": "muhammedhafan",
-        "roll_no": "23",
-        "section": "k23wh"
-    },
-    "776": {
-        "name": "new hafn",
-        "email": "7 gy",
-        "roll_no": "hvjh",
-        "section": " bjhv"
     },
     "12316548": {
         "name": "nasheeth",
@@ -47,10 +23,22 @@
         "roll_no": "23",
         "section": "k23wh"
     },
-    "88080": {
-        "name": "muhammed rizwan",
-        "email": "mafv",
+    "12314792": {
+        "name": "muhammedhfan",
+        "email": "muhammedhafan961@gmail.com",
         "roll_no": "23",
         "section": "k23wh"
+    },
+    "123147922": {
+        "name": "rizwan",
+        "email": "muhammedhafan961@gmail.com",
+        "roll_no": "23",
+        "section": "k23wh"
+    },
+    "1231455": {
+        "name": "elton ",
+        "email": "muhammedhafan961@gmai.com",
+        "roll_no": "35",
+        "section": "23"
     }
 }

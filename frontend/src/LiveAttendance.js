@@ -1,145 +1,100 @@
-
-
 import React, { useState, useEffect } from 'react';
-import './LiveAttendance.css'; 
+import './LiveAttendance.css';
+import * as XLSX from 'xlsx';
 
 function LiveAttendance() {
   const [attendance, setAttendance] = useState({});
-  const [sentiment, setSentiment] = useState({ rating: "...", score: 0, count: 0 });
-  const [error, setError] = useState(null);
-  
-  // Backend on Port 5050
-  const BACKEND_URL = 'http://127.0.0.1:5050'; 
+  const [sentiment, setSentiment] = useState({ rating: "...", score: 0 });
+  const [isStarted, setIsStarted] = useState(false);
+  const BACKEND_URL = 'http://127.0.0.1:5050';
 
   const fetchData = async () => {
     try {
       const resAtt = await fetch(`${BACKEND_URL}/attendance_data?t=${Date.now()}`);
       setAttendance(await resAtt.json());
-      
       const resSent = await fetch(`${BACKEND_URL}/class_sentiment?t=${Date.now()}`);
-      const dataSent = await resSent.json();
-      setSentiment(dataSent);
-      
-      setError(null);
-    } catch (e) { 
-      setError("Connecting to backend..."); 
-    }
+      setSentiment(await resSent.json());
+    } catch { console.error("Fetch error"); }
   };
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 2500); // Fast sync for the bar
+    const interval = setInterval(fetchData, 2500);
     return () => clearInterval(interval);
   }, []);
 
-  const handleEndSession = async () => {
-    if (!window.confirm("End session and email parents of absentees?")) return;
-    try {
-        const res = await fetch(`${BACKEND_URL}/end_session_notify`, { method: 'POST' });
-        const data = await res.json();
-        if (res.ok) alert("✅ " + data.message);
-        else alert("❌ Error: " + data.message);
-    } catch (err) { 
-        alert("❌ Error: Could not connect to backend at port 5050."); 
+  const handleToggleSession = async () => {
+    if (!isStarted) {
+      await fetch(`${BACKEND_URL}/start_session`, { method: 'POST' });
+      setIsStarted(true);
+      setAttendance({});
+    } else {
+      if (!window.confirm("End session and save report?")) return;
+      const res = await fetch(`${BACKEND_URL}/end_session_notify`, { method: 'POST' });
+      const data = await res.json();
+      alert(data.message);
+      setIsStarted(false);
+      setAttendance({});
     }
   };
 
-  const handleReset = async () => {
-    if (!window.confirm("Clear list?")) return;
+  const downloadExcel = async () => {
     try {
-        await fetch(`${BACKEND_URL}/reset_attendance`, { method: 'POST' });
-        setAttendance({});
-    } catch (err) { alert("Reset failed."); }
+      const res = await fetch(`${BACKEND_URL}/students`);
+      const allStudents = await res.json();
+      const presentIds = Object.keys(attendance);
+      const reportData = allStudents.map(student => {
+        const isPresent = presentIds.includes(String(student.register_no));
+        return {
+          "Registration No": student.register_no,
+          "Name": student.name,
+          "Section": student.section,
+          "Status": isPresent ? "PRESENT" : "ABSENT",
+          "Time": isPresent ? new Date(attendance[student.register_no].timestamp).toLocaleTimeString() : "N/A"
+        };
+      });
+      const ws = XLSX.utils.json_to_sheet(reportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Report");
+      XLSX.writeFile(wb, `Attendance_${new Date().toLocaleDateString()}.xlsx`);
+    } catch (err) { alert("Excel Error: " + err.message); }
   };
 
-  // Dynamic Color Logic for the Bar and Text
-  const getVibeColor = (s) => {
-    if (s >= 80) return '#4CAF50'; // Green (Excellent)
-    if (s >= 55) return '#FF9800'; // Orange (Focused/Good)
-    return '#f44336'; // Red (Bored/Low)
-  };
+  const getVibeColor = (s) => (s >= 80 ? '#4CAF50' : s >= 55 ? '#FF9800' : '#f44336');
 
   return (
-    <div className="live-attendance-container" style={{ backgroundColor: '#1a1a1a', color: 'white', minHeight: '100vh', padding: '20px' }}>
-      
+    <div className="live-attendance-container" style={{ backgroundColor: '#1a1a1a', minHeight: '100vh', padding: '20px', color: 'white' }}>
       <div style={{ display: 'flex', gap: '20px', marginBottom: '25px' }}>
-        
-        {/* CLASS VIBE CARD WITH LIVE BAR */}
-        <div style={{ 
-          flex: 1, 
-          backgroundColor: '#2d2d2d', 
-          padding: '20px', 
-          borderRadius: '12px', 
-          borderLeft: `6px solid ${getVibeColor(sentiment.score)}`,
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'center'
-        }}>
-            <p style={{ margin: 0, color: '#aaa', fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase' }}>Class Vibe</p>
-            <h2 style={{ color: getVibeColor(sentiment.score), margin: '10px 0' }}>
-                {sentiment.rating} ({sentiment.score}%)
-            </h2>
-
-            {/* THE LIVE PROGRESS BAR */}
-            <div style={{ 
-              width: '100%', 
-              height: '12px', 
-              backgroundColor: '#444', 
-              borderRadius: '6px', 
-              overflow: 'hidden',
-              marginTop: '5px'
-            }}>
-                <div style={{ 
-                    width: `${sentiment.score}%`, 
-                    height: '100%', 
-                    backgroundColor: getVibeColor(sentiment.score), 
-                    transition: 'width 1s ease-in-out, background-color 0.5s linear' 
-                }}></div>
-            </div>
-            <p style={{ fontSize: '11px', color: '#777', marginTop: '8px' }}>
-                Based on {sentiment.count} detected faces
-            </p>
-        </div>
-
-        {/* ATTENDANCE SUMMARY CARD */}
-        <div style={{ flex: 1, backgroundColor: '#2d2d2d', padding: '20px', borderRadius: '12px', borderLeft: '6px solid #2196F3' }}>
-            <p style={{ margin: 0, color: '#aaa', fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase' }}>Attendance</p>
-            <h2 style={{ color: '#2196F3', margin: '10px 0' }}>{Object.keys(attendance).length} Present</h2>
-            <div style={{ marginTop: '10px' }}>
-                <button onClick={handleEndSession} style={btnS('#FF9800')}>Notify Absentees</button>
-                <button onClick={handleReset} style={{...btnS('#ff4444'), marginLeft: '10px'}}>Reset List</button>
-            </div>
-        </div>
-      </div>
-
-      {/* VIDEO FEED */}
-      <div style={{ borderRadius: '15px', overflow: 'hidden', border: '3px solid #333' }}>
-        <img src={`${BACKEND_URL}/video_feed`} alt="Feed" style={{ width: '100%', display: 'block' }} />
-      </div>
-
-      {/* LOG LIST */}
-      <div style={{ marginTop: '25px', backgroundColor: '#2d2d2d', padding: '15px', borderRadius: '12px' }}>
-        <h3 style={{ borderBottom: '1px solid #444', paddingBottom: '10px' }}>Live Attendance Log</h3>
-        {Object.entries(attendance).map(([regNo, rec]) => (
-          <div key={regNo} style={{ padding: '12px', borderBottom: '1px solid #333', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <strong style={{ fontSize: '16px' }}>{regNo}</strong> 
-            <span style={{ color: '#aaa', fontSize: '13px' }}>Detected at {new Date(rec.timestamp).toLocaleTimeString()}</span>
+        <div style={{ flex: 1, backgroundColor: '#2d2d2d', padding: '20px', borderRadius: '12px', borderLeft: `6px solid ${getVibeColor(sentiment.score)}` }}>
+          <p style={{ fontSize: '12px', color: '#aaa', fontWeight: 'bold' }}>CLASS VIBE</p>
+          <h2 style={{ color: getVibeColor(sentiment.score) }}>{sentiment.rating} ({sentiment.score}%)</h2>
+          <div style={{ height: '10px', background: '#444', borderRadius: '5px' }}>
+            <div style={{ width: `${sentiment.score}%`, height: '100%', background: getVibeColor(sentiment.score), transition: 'width 1s' }} />
           </div>
-        ))}
+        </div>
+        <div style={{ flex: 1, backgroundColor: '#2d2d2d', padding: '20px', borderRadius: '12px', borderLeft: '6px solid #2196F3' }}>
+          <p style={{ fontSize: '12px', color: '#aaa', fontWeight: 'bold' }}>CONTROLS</p>
+          <h2>{Object.keys(attendance).length} Present</h2>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button onClick={handleToggleSession} style={{ ...btn('#4CAF50'), flex: 2 }}>{isStarted ? "⏹ End Session" : "▶ Start"}</button>
+            <button onClick={downloadExcel} style={{ ...btn('#2196F3'), flex: 1 }}>📊 Excel</button>
+          </div>
+        </div>
+      </div>
+      <img src={`${BACKEND_URL}/video_feed`} alt="Live Feed" style={{ width: '100%', borderRadius: '15px', border: '3px solid #333' }} />
+      <div style={{ marginTop: '20px', backgroundColor: '#2d2d2d', padding: '20px', borderRadius: '12px' }}>
+        <h3>{isStarted ? "🔴 Live Log" : "⚪ Paused"}</h3>
+        <div style={{ maxHeight: '350px', overflowY: 'auto' }}>
+          {Object.entries(attendance).reverse().map(([reg, rec]) => (
+            <div key={reg} style={{ background: '#333', padding: '15px', borderRadius: '10px', marginBottom: '10px', display: 'flex', justifyContent: 'space-between', borderLeft: '4px solid #4CAF50' }}>
+              <strong>{reg}</strong>
+              <span style={{ color: '#4CAF50', fontWeight: 'bold' }}>Present <span style={{ color: '#aaa', fontWeight: 'normal' }}>({new Date(rec.timestamp).toLocaleTimeString()})</span></span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
 }
-
-const btnS = (c) => ({ 
-    backgroundColor: c, 
-    color: 'white', 
-    border: 'none', 
-    padding: '10px 18px', 
-    borderRadius: '6px', 
-    cursor: 'pointer', 
-    fontWeight: 'bold',
-    fontSize: '13px'
-});
-
+const btn = (bg) => ({ background: bg, color: 'white', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' });
 export default LiveAttendance;

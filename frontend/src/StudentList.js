@@ -1,119 +1,195 @@
 
 
-import React, { useEffect, useState, useCallback } from "react";
+// import React, { useEffect, useState, useCallback } from "react";
+// import axios from "axios";
+
+// const StudentList = () => {
+//   const [students, setStudents] = useState([]);
+//   const [loading, setLoading] = useState(true);
+//   const [sortOrder, setSortOrder] = useState("asc");
+//   const BACKEND_URL = "http://127.0.0.1:5050";
+
+//   const fetchStudents = async () => {
+//     try {
+//       const response = await axios.get(`${BACKEND_URL}/students?t=${Date.now()}`);
+//       const sorted = [...response.data].sort((a, b) => {
+//         return sortOrder === "asc" ? a.roll_no - b.roll_no : b.roll_no - a.roll_no;
+//       });
+//       setStudents(sorted);
+//       setLoading(false);
+//     } catch (err) { console.error(err); }
+//   };
+
+//   useEffect(() => {
+//     fetchStudents();
+//     const interval = setInterval(fetchStudents, 5000);
+//     return () => clearInterval(interval);
+//   }, [sortOrder]);
+
+//   // --- NEW DELETE FUNCTION ---
+//   const handleDelete = async (regNo) => {
+//     if (window.confirm(`Are you sure you want to delete Registration No: ${regNo}?`)) {
+//       try {
+//         await axios.delete(`${BACKEND_URL}/delete_student/${regNo}`);
+//         alert("Student deleted successfully");
+//         fetchStudents(); // Refresh the list
+//       } catch (err) {
+//         alert("Failed to delete student");
+//       }
+//     }
+//   };
+
+//   if (loading) return <div style={{color:'white', padding:'50px'}}>Loading...</div>;
+
+//   return (
+//     <div style={{ padding: '40px', backgroundColor: '#1a1a1a', minHeight: '100vh', color: 'white' }}>
+//       <h1 style={{ textAlign: 'center', color: '#ff8c00' }}>Registered Students</h1>
+      
+//       <table style={{ width: '100%', marginTop: '30px', borderCollapse: 'collapse', backgroundColor: '#262626' }}>
+//         <thead>
+//           <tr style={{ backgroundColor: '#333', color: '#ff8c00', textAlign: 'left' }}>
+//             <th style={tS}>Registration No</th>
+//             <th style={tS}>Name</th>
+//             <th style={tS}>Roll No</th>
+//             <th style={tS}>Section</th>
+//             <th style={tS}>Parent's Email</th>
+//             <th style={tS}>Action</th> {/* New Column */}
+//           </tr>
+//         </thead>
+//         <tbody>
+//           {students.map((student) => (
+//             <tr key={student.register_no} style={{ borderBottom: '1px solid #444' }}>
+//               <td style={tS}>{student.register_no}</td>
+//               <td style={tS}>{student.name}</td>
+//               <td style={tS}>{student.roll_no}</td>
+//               <td style={tS}>{student.section}</td>
+//               <td style={tS}>{student.email}</td>
+//               <td style={tS}>
+//                 <button 
+//                   onClick={() => handleDelete(student.register_no)}
+//                   style={{ backgroundColor: '#ff4444', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer' }}
+//                 >
+//                   Delete
+//                 </button>
+//               </td>
+//             </tr>
+//           ))}
+//         </tbody>
+//       </table>
+//     </div>
+//   );
+// };
+
+// const tS = { padding: '15px', border: '1px solid #333' };
+
+// export default StudentList;
+
+
+
+
+
+import React, { useEffect, useState } from "react";
 import axios from "axios";
 
 const StudentList = () => {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [sortOrder, setSortOrder] = useState("asc");
+  const BACKEND_URL = "http://127.0.0.1:5050";
 
-  // Logic to sort data (defined outside to be reusable)
-  const getSortedData = useCallback((data, order) => {
-    return [...data].sort((a, b) => {
-      const rollA = parseInt(a.roll_no) || 0;
-      const rollB = parseInt(b.roll_no) || 0;
-      return order === "asc" ? rollA - rollB : rollB - rollA;
-    });
-  }, []);
-
-  const fetchStudents = async (isInitial = false) => {
+  const fetchStudents = async () => {
     try {
-      // Added ?t= timestamp to prevent the browser from caching old data
-      const response = await axios.get(`http://127.0.0.1:5050/students?t=${new Date().getTime()}`);
-      
-      // Keep the current sort order even after refreshing
-      const sortedResult = getSortedData(response.data, sortOrder);
-      
-      setStudents(sortedResult);
-      setError(null);
-    } catch (err) {
-      console.error("Fetch error:", err);
-      setError("Failed to connect to backend server.");
-    } finally {
-      if (isInitial) setLoading(false);
+      const response = await axios.get(`${BACKEND_URL}/students?t=${Date.now()}`);
+      const sorted = [...response.data].sort((a, b) => {
+        const rollA = parseInt(a.roll_no) || 0;
+        const rollB = parseInt(b.roll_no) || 0;
+        return sortOrder === "asc" ? rollA - rollB : rollB - rollA;
+      });
+      setStudents(sorted);
+      setLoading(false);
+    } catch (err) { 
+      console.error("Fetch error:", err); 
     }
   };
 
   useEffect(() => {
-    // 1. Fetch immediately when page opens
-    fetchStudents(true);
-
-    // 2. Setup "Live Connection": Refresh list every 3 seconds
-    const interval = setInterval(() => {
-      fetchStudents(false);
-    }, 3000);
-
-    // 3. Cleanup: Stop refreshing when you leave the page
+    fetchStudents();
+    const interval = setInterval(fetchStudents, 5000);
     return () => clearInterval(interval);
-  }, [sortOrder, getSortedData]);
+  }, [sortOrder]);
 
-  const handleSort = () => {
-    const nextOrder = sortOrder === "asc" ? "desc" : "asc";
-    setSortOrder(nextOrder);
-    // Sort existing data immediately for better UI feel
-    setStudents(getSortedData(students, nextOrder));
+  const handleDelete = async (regNo) => {
+    if (window.confirm(`Are you sure you want to delete Registration No: ${regNo}?`)) {
+      try {
+        const response = await axios.delete(`${BACKEND_URL}/delete_student/${regNo}`);
+        if (response.data.status === "success") {
+          alert("✅ Student deleted successfully");
+          fetchStudents(); 
+        }
+      } catch (err) {
+        console.error("Delete error:", err);
+        alert("❌ Failed to delete student from Backend.");
+      }
+    }
   };
 
-  if (loading) return <div className="p-10 text-center text-gray-500">Loading Database...</div>;
+  if (loading) return <div style={{color:'white', padding:'50px', textAlign:'center'}}>Loading Database...</div>;
 
   return (
-    <div className="p-8 bg-gray-50 min-h-screen font-sans">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-extrabold text-gray-900">Registered Students</h1>
-            <div className="flex items-center mt-1">
-              <span className="h-2 w-2 bg-green-500 rounded-full mr-2 animate-pulse"></span>
-              <p className="text-gray-500 text-sm italic">Live Syncing: {students.length} Total</p>
-            </div>
-          </div>
+    <div style={{ padding: '40px', backgroundColor: '#1a1a1a', minHeight: '100vh', color: 'white', fontFamily: 'sans-serif' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column' }}>
+        <h2 style={{ color: '#ff8c00', marginBottom: '5px' }}>Students List</h2>
+        <h1 style={{ marginTop: '0', marginBottom: '20px' }}>Registered Students</h1>
+      </div>
 
-          <button
-            onClick={handleSort}
-            style={{ backgroundColor: "#ff8c00" }}
-            className="text-white px-6 py-2.5 rounded-lg font-bold shadow-lg active:scale-95 hover:brightness-90"
-          >
-            Sort by Roll No {sortOrder === "asc" ? "↑" : "↓"}
-          </button>
-        </div>
-
-        <div className="bg-white shadow-2xl rounded-2xl overflow-hidden border border-gray-200">
-          <table className="w-full text-left">
-            <thead className="bg-gray-900 text-white text-sm uppercase">
-              <tr>
-                <th className="p-5 font-bold">Registration No</th>
-                <th className="p-5 font-bold">Name</th>
-                <th className="p-5 font-bold">Roll No</th>
-                <th className="p-5 font-bold">Section</th>
-                <th className="p-5 font-bold">Parent's Email</th>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+        <span style={{ color: '#aaa', fontSize: '14px' }}>Live Syncing: {students.length} Total</span>
+        <button 
+          onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")} 
+          style={{ backgroundColor: "#ff8c00", color: 'white', border: 'none', padding: '10px 15px', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer' }}
+        >
+          Sort by Roll No {sortOrder === "asc" ? "↑" : "↓"}
+        </button>
+      </div>
+      
+      <div style={{ borderRadius: '10px', overflow: 'hidden', border: '1px solid #333' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: '#262626' }}>
+          <thead>
+            <tr style={{ backgroundColor: '#333', color: '#ff8c00', textAlign: 'left' }}>
+              <th style={tS}>Registration No</th>
+              <th style={tS}>Name</th>
+              <th style={tS}>Roll No</th>
+              <th style={tS}>Section</th>
+              <th style={tS}>Parent's Email</th>
+              <th style={{...tS, textAlign: 'center'}}>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {students.map((student) => (
+              <tr key={student.register_no} style={{ borderBottom: '1px solid #444' }}>
+                <td style={tS}>{student.register_no}</td>
+                <td style={tS}>{student.name}</td>
+                <td style={tS}>{student.roll_no}</td>
+                <td style={tS}>{student.section}</td>
+                <td style={tS}>{student.email}</td>
+                <td style={{...tS, textAlign: 'center'}}>
+                  <button 
+                    onClick={() => handleDelete(student.register_no)}
+                    style={{ backgroundColor: '#dc2626', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}
+                  >
+                    Delete
+                  </button>
+                </td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {students.length === 0 ? (
-                <tr>
-                  <td colSpan="5" className="p-20 text-center text-gray-400 italic">No students registered yet.</td>
-                </tr>
-              ) : (
-                students.map((student, index) => (
-                  <tr key={index} className="hover:bg-violet-50/50 transition-colors">
-                    <td className="p-5 font-mono text-violet-700 font-bold">{student.register_no}</td>
-                    <td className="p-5 text-gray-900 font-semibold italic">{student.name}</td>
-                    <td className="p-5 text-gray-900 font-bold text-lg">{student.roll_no}</td>
-                    <td className="p-5">
-                      <span className="bg-gray-800 text-gray-100 px-3 py-1 rounded text-xs font-black uppercase">{student.section}</span>
-                    </td>
-                    <td className="p-5 text-gray-600 font-medium">{student.email}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
 };
 
+const tS = { padding: '15px', fontSize: '14px' };
+
 export default StudentList;
+

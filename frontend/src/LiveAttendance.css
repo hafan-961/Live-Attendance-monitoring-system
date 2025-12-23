@@ -1,62 +1,48 @@
-/* LiveAttendance.css */
-.live-attendance-container {
-  font-family: Arial, sans-serif;
-  max-width: 1200px;
-  margin: 20px auto;
-  padding: 20px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  background-color: var(--input-bg-color);
+/* ===== ROOT LAYOUT ===== */
+.app-layout {
+  display: flex;
+  height: 100vh;          /* Full screen */
+  overflow: hidden;       /* Disable body scroll */
 }
 
+/* ===== SIDEBAR (LEFT) ===== */
+.sidebar {
+  width: 260px;
+  background-color: #222;
+  height: 100vh;
+  flex-shrink: 0;
+}
+
+/* ===== RIGHT CONTENT (SCROLLABLE) ===== */
+.live-attendance-container {
+  flex: 1;
+  height: 100vh;
+  overflow-y: auto;       /* ✅ MAIN SCROLL */
+  padding: 20px;
+
+  font-family: Arial, sans-serif;
+  background-color: #1a1a1a;
+  color: white;
+}
+
+/* ===== OPTIONAL: SCROLLBAR STYLING ===== */
+.live-attendance-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.live-attendance-container::-webkit-scrollbar-thumb {
+  background: #444;
+  border-radius: 10px;
+}
+
+.live-attendance-container::-webkit-scrollbar-track {
+  background: #1a1a1a;
+}
+
+/* ===== COMMON STYLES ===== */
 h1, h2 {
-  color: #333;
   text-align: center;
   margin-bottom: 20px;
-}
-
-.video-section, .attendance-section {
-  margin-bottom: 30px;
-  padding: 15px;
-  border: 1px solid #eee;
-  border-radius: 5px;
-  background-color: #f9f9f9;
-}
-
-.live-video-feed {
-  display: block;
-  width: 100%;
-  max-width: 800px; /* Limit video width */
-  margin: 0 auto;
-  border: 2px solid #4CAF50;
-  border-radius: 5px;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
-}
-
-.attendance-list {
-  list-style-type: none;
-  padding: 0;
-}
-
-.attendance-item {
-  background-color: #e6ffe6;
-  border: 1px solid #c6ecc6;
-  padding: 10px 15px;
-  margin-bottom: 8px;
-  border-radius: 4px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.attendance-item strong {
-  color: #28a745;
-}
-
-.status-present {
-  font-weight: bold;
-  color: #28a745;
 }
 
 .error-message {
