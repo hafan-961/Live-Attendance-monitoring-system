@@ -1,5 +1,358 @@
 [
     {
+        "session_id": "20251224_110904",
+        "date": "2025-12-24",
+        "time": "11:09 AM",
+        "present_count": 2,
+        "absent_count": 9,
+        "present_list": [
+            {
+                "name": "muhammed hafan",
+                "email": "sdv@gmail.com",
+                "roll_no": "24",
+                "section": "k23wh",
+                "reg_no": "muhammed hafan",
+                "final_emotion": "Focused \ud83d\ude10"
+            },
+            {
+                "name": "nasheeth",
+                "email": "nasheethnashee008@gmail.com",
+                "roll_no": "64",
+                "section": "k23wh",
+                "reg_no": "12316348",
+                "final_emotion": "Bored \ud83e\udd71"
+            }
+        ],
+        "absent_list": [
+            {
+                "name": "Sooraj R",
+                "email": "soorajr000005@gmail.com",
+                "roll_no": "55",
+                "section": "k23wh",
+                "reg_no": "12319357"
+            },
+            {
+                "name": "nasheeth",
+                "email": "nasheethnashee008@gmail.com",
+                "roll_no": "64",
+                "section": "k23wh",
+                "reg_no": "12316548"
+            },
+            {
+                "name": "muhammed rizwan",
+                "email": "ok",
+                "roll_no": "23",
+                "section": "k23wh",
+                "reg_no": "99999111"
+            },
+            {
+                "name": "muhammedhfan",
+                "email": "muhammedhafan961@gmail.com",
+                "roll_no": "23",
+                "section": "k23wh",
+                "reg_no": "12314792"
+            },
+            {
+                "name": "rizwan",
+                "email": "muhammedhafan961@gmail.com",
+                "roll_no": "23",
+                "section": "k23wh",
+                "reg_no": "123147922"
+            },
+            {
+                "name": "elton ",
+                "email": "muhammedhafan961@gmai.com",
+                "roll_no": "35",
+                "section": "23",
+                "reg_no": "1231455"
+            },
+            {
+                "name": "rahul",
+                "email": "r9979413@gmail.com",
+                "roll_no": "23",
+                "section": "k23wh",
+                "reg_no": "12307262"
+            },
+            {
+                "name": "john k sunny",
+                "email": "johnksunny9@gmail.com",
+                "roll_no": "32",
+                "section": "k23wh",
+                "reg_no": "1232157"
+            },
+            {
+                "name": "atheerth",
+                "email": "atheerthsanilkumar@gmail.com",
+                "roll_no": "19",
+                "section": "k23wh",
+                "reg_no": "12308196"
+            }
+        ]
+    },
+    {
+        "session_id": "20251224_103015",
+        "date": "2025-12-24",
+        "time": "10:30 AM",
+        "present_count": 4,
+        "absent_count": 7,
+        "present_list": [
+            {
+                "name": "rahul",
+                "email": "r9979413@gmail.com",
+                "roll_no": "23",
+                "section": "k23wh",
+                "reg_no": "12307262"
+            },
+            {
+                "name": "nasheeth",
+                "email": "nasheethnashee008@gmail.com",
+                "roll_no": "64",
+                "section": "k23wh",
+                "reg_no": "12316348"
+            },
+            {
+                "name": "john k sunny",
+                "email": "johnksunny9@gmail.com",
+                "roll_no": "32",
+                "section": "k23wh",
+                "reg_no": "1232157"
+            },
+            {
+                "name": "atheerth",
+                "email": "atheerthsanilkumar@gmail.com",
+                "roll_no": "19",
+                "section": "k23wh",
+                "reg_no": "12308196"
+            }
+        ],
+        "absent_list": [
+            {
+                "name": "Sooraj R",
+                "email": "soorajr000005@gmail.com",
+                "roll_no": "55",
+                "section": "k23wh",
+                "reg_no": "12319357"
+            },
+            {
+                "name": "muhammed hafan",
+                "email": "sdv@gmail.com",
+                "roll_no": "24",
+                "section": "k23wh",
+                "reg_no": "muhammed hafan"
+            },
+            {
+                "name": "nasheeth",
+                "email": "nasheethnashee008@gmail.com",
+                "roll_no": "64",
+                "section": "k23wh",
+                "reg_no": "12316548"
+            },
+            {
+                "name": "muhammed rizwan",
+                "email": "ok",
+                "roll_no": "23",
+                "section": "k23wh",
+                "reg_no": "99999111"
+            },
+            {
+                "name": "muhammedhfan",
+                "email": "muhammedhafan961@gmail.com",
+                "roll_no": "23",
+                "section": "k23wh",
+                "reg_no": "12314792"
+            },
+            {
+                "name": "rizwan",
+                "email": "muhammedhafan961@gmail.com",
+                "roll_no": "23",
+                "section": "k23wh",
+                "reg_no": "123147922"
+            },
+            {
+                "name": "elton ",
+                "email": "muhammedhafan961@gmai.com",
+                "roll_no": "35",
+                "section": "23",
+                "reg_no": "1231455"
+            }
+        ]
+    },
+    {
+        "session_id": "20251224_102647",
+        "date": "2025-12-24",
+        "time": "10:26 AM",
+        "present_count": 0,
+        "absent_count": 11,
+        "present_list": [],
+        "absent_list": [
+            {
+                "name": "Sooraj R",
+                "email": "soorajr000005@gmail.com",
+                "roll_no": "55",
+                "section": "k23wh",
+                "reg_no": "12319357"
+            },
+            {
+                "name": "muhammed hafan",
+                "email": "sdv@gmail.com",
+                "roll_no": "24",
+                "section": "k23wh",
+                "reg_no": "muhammed hafan"
+            },
+            {
+                "name": "nasheeth",
+                "email": "nasheethnashee008@gmail.com",
+                "roll_no": "64",
+                "section": "k23wh",
+                "reg_no": "12316548"
+            },
+            {
+                "name": "muhammed rizwan",
+                "email": "ok",
+                "roll_no": "23",
+                "section": "k23wh",
+                "reg_no": "99999111"
+            },
+            {
+                "name": "muhammedhfan",
+                "email": "muhammedhafan961@gmail.com",
+                "roll_no": "23",
+                "section": "k23wh",
+                "reg_no": "12314792"
+            },
+            {
+                "name": "rizwan",
+                "email": "muhammedhafan961@gmail.com",
+                "roll_no": "23",
+                "section": "k23wh",
+                "reg_no": "123147922"
+            },
+            {
+                "name": "elton ",
+                "email": "muhammedhafan961@gmai.com",
+                "roll_no": "35",
+                "section": "23",
+                "reg_no": "1231455"
+            },
+            {
+                "name": "rahul",
+                "email": "r9979413@gmail.com",
+                "roll_no": "23",
+                "section": "k23wh",
+                "reg_no": "12307262"
+            },
+            {
+                "name": "nasheeth",
+                "email": "nasheethnashee008@gmail.com",
+                "roll_no": "64",
+                "section": "k23wh",
+                "reg_no": "12316348"
+            },
+            {
+                "name": "john k sunny",
+                "email": "johnksunny9@gmail.com",
+                "roll_no": "32",
+                "section": "k23wh",
+                "reg_no": "1232157"
+            },
+            {
+                "name": "atheerth",
+                "email": "atheerthsanilkumar@gmail.com",
+                "roll_no": "19",
+                "section": "k23wh",
+                "reg_no": "12308196"
+            }
+        ]
+    },
+    {
+        "session_id": "20251224_102633",
+        "date": "2025-12-24",
+        "time": "10:26 AM",
+        "present_count": 3,
+        "absent_count": 8,
+        "present_list": [
+            {
+                "name": "muhammed hafan",
+                "email": "sdv@gmail.com",
+                "roll_no": "24",
+                "section": "k23wh",
+                "reg_no": "muhammed hafan"
+            },
+            {
+                "name": "muhammedhfan",
+                "email": "muhammedhafan961@gmail.com",
+                "roll_no": "23",
+                "section": "k23wh",
+                "reg_no": "12314792"
+            },
+            {
+                "name": "rizwan",
+                "email": "muhammedhafan961@gmail.com",
+                "roll_no": "23",
+                "section": "k23wh",
+                "reg_no": "123147922"
+            }
+        ],
+        "absent_list": [
+            {
+                "name": "Sooraj R",
+                "email": "soorajr000005@gmail.com",
+                "roll_no": "55",
+                "section": "k23wh",
+                "reg_no": "12319357"
+            },
+            {
+                "name": "nasheeth",
+                "email": "nasheethnashee008@gmail.com",
+                "roll_no": "64",
+                "section": "k23wh",
+                "reg_no": "12316548"
+            },
+            {
+                "name": "muhammed rizwan",
+                "email": "ok",
+                "roll_no": "23",
+                "section": "k23wh",
+                "reg_no": "99999111"
+            },
+            {
+                "name": "elton ",
+                "email": "muhammedhafan961@gmai.com",
+                "roll_no": "35",
+                "section": "23",
+                "reg_no": "1231455"
+            },
+            {
+                "name": "rahul",
+                "email": "r9979413@gmail.com",
+                "roll_no": "23",
+                "section": "k23wh",
+                "reg_no": "12307262"
+            },
+            {
+                "name": "nasheeth",
+                "email": "nasheethnashee008@gmail.com",
+                "roll_no": "64",
+                "section": "k23wh",
+                "reg_no": "12316348"
+            },
+            {
+                "name": "john k sunny",
+                "email": "johnksunny9@gmail.com",
+                "roll_no": "32",
+                "section": "k23wh",
+                "reg_no": "1232157"
+            },
+            {
+                "name": "atheerth",
+                "email": "atheerthsanilkumar@gmail.com",
+                "roll_no": "19",
+                "section": "k23wh",
+                "reg_no": "12308196"
+            }
+        ]
+    },
+    {
         "session_id": "20251224_001444",
         "date": "2025-12-24",
         "time": "12:14 AM",

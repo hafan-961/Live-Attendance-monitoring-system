@@ -27,7 +27,7 @@ except Exception as e:
 
 # --- Camera Feed Setup ---
 
-CAMERA_URL = "http://10.6.192.103:8080/video"
+CAMERA_URL = "http://10.194.60.125:8080/video"
 print(f"Connecting to camera: {CAMERA_URL}")
 cap = cv2.VideoCapture(CAMERA_URL)
 
