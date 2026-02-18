@@ -1,8 +1,8 @@
 /* ===== ROOT LAYOUT ===== */
 .app-layout {
   display: flex;
-  height: 100vh;          /* Full screen */
-  overflow: hidden;       /* Disable body scroll */
+  height: 100vh;          
+  overflow: hidden;       
 }
 
 /* ===== SIDEBAR (LEFT) ===== */
@@ -17,7 +17,7 @@
 .live-attendance-container {
   flex: 1;
   height: 100vh;
-  overflow-y: auto;       /* ✅ MAIN SCROLL */
+  overflow-y: auto;      
   padding: 20px;
 
   font-family: Arial, sans-serif;

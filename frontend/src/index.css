@@ -1,28 +1,28 @@
 /* index.css */
 
-/* --- Global Theme Variables --- */
+
 :root {
-  --primary-bg-color: #1e1e1e; /* Dark background, similar to your login page */
-  --secondary-bg-color: #2a2a2a; /* Slightly lighter dark for cards/containers */
-  --sidebar-bg-color: #2b3036; /* Specific dark background for sidebar */
-  --accent-color: #ff8c00; /* Bright orange for buttons, highlights */
-  --text-color-light: #f0f0f0; /* Light text for readability */
-  --text-color-dark: #333; /* Dark text for contrast on light backgrounds */
-  --border-color: #444; /* Darker border for inputs */
-  --input-bg-color: #333; /* Dark background for input fields */
-  --success-color: #4CAF50; /* Green for success */
-  --error-color: #dc3545; /* Red for errors */
+  --primary-bg-color: #1e1e1e; 
+  --secondary-bg-color: #2a2a2a; 
+  --sidebar-bg-color: #2b3036; 
+  --accent-color: #ff8c00; 
+  --text-color-light: #f0f0f0;
+  --text-color-dark: #333; 
+  --border-color: #444; 
+  --input-bg-color: #333; 
+  --success-color: #4CAF50; 
+  --error-color: #dc3545; 
 }
 
-/* --- Base Body Styles --- */
+
 body {
   margin: 0;
-  font-family: 'Inter', sans-serif; /* Using a more modern font for example */
+  font-family: 'Inter', sans-serif; 
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: var(--primary-bg-color); /* Apply dark background to the entire body */
-  color: var(--text-color-light); /* Default text color */
-  overflow: hidden; /* Prevent body scroll, content areas will scroll if needed */
+  background-color: var(--primary-bg-color); 
+  color: var(--text-color-light); 
+  overflow: hidden; 
 }
 
 code {
@@ -30,7 +30,7 @@ code {
     monospace;
 }
 
-/* --- Base Input and Button Styles --- */
+
 input[type="text"],
 input[type="email"],
 input[type="number"],
@@ -43,7 +43,7 @@ button {
 button {
   padding: 10px 20px;
   border: none;
-  border-radius: 8px; /* Slightly more rounded */
+  border-radius: 8px; 
   cursor: pointer;
   transition: background-color 0.3s ease, transform 0.2s ease;
   font-size: 1rem;
@@ -65,7 +65,7 @@ button:disabled {
   color: white;
 }
 .btn-primary:hover:not(:disabled) {
-  background-color: #e07b00; /* Slightly darker orange on hover */
+  background-color: #e07b00; 
 }
 
 .btn-success {
@@ -78,37 +78,37 @@ button:disabled {
 
 /* --- CORE LAYOUT: App Layout --- */
 .app-layout {
-  display: flex; /* Makes children (Sidebar and Main Content) lay out in a row */
-  min-height: 100vh; /* Ensures the app takes at least the full viewport height */
-  width: 100vw;    /* Ensures the app takes the full viewport width */
-  overflow: hidden; /* Crucial: Prevents main content from creating horizontal scroll */
+  display: flex; 
+  min-height: 100vh; 
+  width: 100vw;    
+  overflow: hidden; 
 }
 
 /* --- Sidebar Container --- */
 .sidebar-container {
-  width: 280px; /* FIXED WIDTH for the sidebar */
-  flex-shrink: 0; /* Prevents sidebar from shrinking if content grows */
-  background-color: var(--sidebar-bg-color); /* Darker sidebar background */
+  width: 280px; 
+  flex-shrink: 0; 
+  background-color: var(--sidebar-bg-color); 
   color: var(--text-color-light);
   padding: 20px 0;
   box-shadow: 2px 0 10px rgba(0, 0, 0, 0.4);
   display: flex;
   flex-direction: column;
-  justify-content: flex-start; /* Pushes bottom icons to the bottom */
+  justify-content: flex-start; 
   z-index: 1000;
-  overflow-y: auto; /* Allow sidebar content to scroll independently if it overflows */
+  overflow-y: auto; 
 }
 
 /* --- Sidebar Header (Logo Area) --- */
 .sidebar-header {
-  padding: 0 20px 30px 20px; /* Adjust padding around the logo */
+  padding: 0 20px 30px 20px; 
   text-align: center;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1); /* Subtle separator */
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1); 
   margin-bottom: 20px;
 }
 
 .sidebar-logo {
-  max-width: 120px; /* Adjust logo size */
+  max-width: 120px;
   height: auto;
   margin-bottom: 10px;
 }
@@ -121,14 +121,14 @@ button:disabled {
 }
 
 .sidebar-nav-item {
-  display: flex; /* Aligns icon and text horizontally */
+  display: flex; 
   align-items: center;
-  width: calc(100% - 40px); /* Full width minus side padding */
+  width: calc(100% - 40px); 
   padding: 12px 20px;
-  margin: 5px 20px; /* Add margin for spacing between items */
+  margin: 5px 20px; 
   background: none;
   border: none;
-  border-radius: 8px; /* Rounded corners for navigation items */
+  border-radius: 8px; 
   color: var(--text-color-light);
   font-size: 1.1rem;
   font-weight: 500;
@@ -138,33 +138,33 @@ button:disabled {
 }
 
 .sidebar-nav-item:hover {
-  background-color: rgba(255, 255, 255, 0.08); /* Light hover effect */
-  color: var(--accent-color); /* Highlight text on hover */
+  background-color: rgba(255, 255, 255, 0.08); 
+  color: var(--accent-color); 
 }
 
 .sidebar-icon {
   margin-right: 15px;
-  font-size: 1.6rem; /* Bigger icons */
-  color: rgba(255, 255, 255, 0.7); /* Slightly muted icon color */
+  font-size: 1.6rem; 
+  color: rgba(255, 255, 255, 0.7); 
   transition: color 0.2s ease;
 }
 
 .sidebar-nav-item:hover .sidebar-icon {
-  color: var(--accent-color); /* Highlight icon on hover */
+  color: var(--accent-color); 
 }
 
 .sidebar-label {
-  flex-grow: 1; /* Allows label to take available space */
+  flex-grow: 1; 
 }
 
 /* --- Sidebar Bottom Icons --- */
 .sidebar-bottom-icons {
     padding: 20px;
     display: flex;
-    flex-direction: column; /* Stack icons vertically */
+    flex-direction: column; 
     align-items: center;
-    gap: 15px; /* Space between bottom icons */
-    border-top: 1px solid rgba(255, 255, 255, 0.1); /* Separator from main nav */
+    gap: 15px; 
+    border-top: 1px solid rgba(255, 255, 255, 0.1); 
     margin-top: 20px;
 }
 
@@ -172,11 +172,11 @@ button:disabled {
     background: none;
     border: none;
     color: var(--text-color-light);
-    font-size: 1.8rem; /* Larger icons for bottom bar */
+    font-size: 1.8rem; 
     cursor: pointer;
     transition: color 0.2s ease, transform 0.2s ease;
-    padding: 10px; /* Make clickable area larger */
-    border-radius: 50%; /* Optional: round background on hover */
+    padding: 10px; 
+    border-radius: 50%; 
 }
 
 .sidebar-bottom-icon-item:hover {
@@ -187,24 +187,24 @@ button:disabled {
 
 /* --- Main Content Area --- */
 .main-content-area {
-  flex-grow: 1; /* Takes up all remaining horizontal space */
-  padding: 40px; /* Add padding to the main content */
-  background-color: var(--primary-bg-color); /* Ensure consistent background */
-  color: var(--text-color-light); /* Default text color for content */
-  overflow-y: auto; /* CRUCIAL: Allows main content to scroll independently */
-  -webkit-overflow-scrolling: touch; /* For smoother scrolling on iOS */
+  flex-grow: 1; 
+  padding: 40px; 
+  background-color: var(--primary-bg-color); 
+  color: var(--text-color-light); 
+  overflow-y: auto; 
+  -webkit-overflow-scrolling: touch; 
 }
 
 /* --- Typography & Overrides for Main Content --- */
 .main-content-area h1,
 .main-content-area h2,
 .main-content-area h3 {
-  color: var(--text-color-light); /* Ensure headings are light */
+  color: var(--text-color-light); 
 }
 
 /* Override existing `text-blue-600` if it's from a utility class not explicitly themed */
 .main-content-area .text-blue-600 {
-  color: var(--accent-color); /* Use accent color for main headings */
+  color: var(--accent-color); 
 }
 
 /* --- RegisterStudent Component Specific Styles --- */
@@ -212,7 +212,7 @@ button:disabled {
   display: flex;
   justify-content: center;
   padding: 40px 20px;
-  min-height: calc(100vh - 80px); /* Adjust based on your header/footer height */
+  min-height: calc(100vh - 80px); 
   box-sizing: border-box;
 }
 
@@ -267,7 +267,7 @@ button:disabled {
 .live-camera-feed {
   display: block;
   width: 100%;
-  max-width: 90vw; /* Increased size to be very big relative to viewport */
+  max-width: 90vw; 
   height: auto;
   border: 2px solid var(--border-color);
   border-radius: 8px;

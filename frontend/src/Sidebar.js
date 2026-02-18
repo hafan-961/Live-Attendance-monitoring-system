@@ -1,65 +1,6 @@
-// import React from "react";
-
-// function Sidebar({ setPage }) {
-//   return (
-//     <div className="w-64 h-screen bg-white shadow-lg p-6">
-//       <h2 className="text-2xl font-bold text-blue-600 mb-8">AI Attendance</h2>
-
-//       <ul className="space-y-4 text-gray-700 font-medium">
-//         <li 
-//           className="cursor-pointer hover:text-blue-600"
-//           onClick={() => setPage("dashboard")}
-//         >
-//           Dashboard
-//         </li>
-
-//         <li 
-//           className="cursor-pointer hover:text-blue-600"
-//           onClick={() => setPage("attendance")}
-//         >
-//           Attendance Records
-//         </li>
-
-//         <li 
-//           className="cursor-pointer hover:text-blue-600"
-//           onClick={() => setPage("register")}
-//         >
-//           Register Student
-//         </li>
-
-//         <li 
-//           className="cursor-pointer hover:text-blue-600"
-//           onClick={() => setPage("live")}
-//         >
-//           Live Attendance
-//         </li>
-
-
-
-//         <li 
-//           className="cursor-pointer hover:text-blue-600"
-//           onClick={() => setPage("students")}
-//         >
-//           Students List
-//         </li>
-
-//         <li 
-//           className="cursor-pointer hover:text-blue-600"
-//           onClick={() => setPage("settings")}
-//         >
-//           Settings
-//         </li>
-//       </ul>
-//     </div>
-//   );
-// }
-
-// export default Sidebar;
-
-
 
 import React from "react";
-// Import icons from react-icons. We'll pick some suitable ones from Material Design (Md)
+
 import { 
   MdDashboard, 
   MdBarChart, // For Attendance Records
@@ -67,13 +8,13 @@ import {
   MdVideocam, // For Live Attendance
   MdPeople, 
   MdSettings,
-  MdHelpOutline, // Example for bottom icons
-  MdNotifications, // Example for bottom icons
-  MdBrightness4 // Example for bottom icons (Dark/Light mode toggle)
+  MdHelpOutline, 
+  MdNotifications, 
+  MdBrightness4 
 } from 'react-icons/md';
 
-// Assuming your LPU logo is in 'public' folder:
-const lpuLogoPath = '/lpu_logo.png'; // Adjust if your logo is named differently or in a subfolder of public/
+
+const lpuLogoPath = '/lpu_logo.png'; 
 
 function Sidebar({ setPage }) {
   // Define your navigation items with icons
