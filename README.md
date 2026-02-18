@@ -52,7 +52,7 @@ An end-to-end **Biometric Attendance System** that leverages Computer Vision and
 │  (IP Camera /   │    │  Thread B: Emotion/Engagement    │    │  Atomic Updates   │
 │   Phone)        │    │           Scoring                │    └───────────────────┘
 └─────────────────┘    └──────────────────────────────────┘             │
-                                                                         ▼
+                                                                        ▼
                                                                ┌───────────────────┐
                                                                │     UI Layer      │
                                                                │  React Dashboard  │
