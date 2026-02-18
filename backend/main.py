@@ -17,19 +17,19 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import sys
 
-# Stop TensorFlow logs
+#stop TensorFlow logs
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
 
 app_flask = Flask(__name__)
 CORS(app_flask, resources={r"/*": {"origins": "*"}}, methods=["GET", "POST", "DELETE", "OPTIONS"])
 
-# --- CONFIGURATION ---
+# CONFIGURATION
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
 SENDER_EMAIL = "dsr.lovely.professional@gmail.com"
 SENDER_PASSWORD = "ysfmjnuejldjkdyv" 
 
-# IMPORTANT: Update this IP if your phone IP changes
+#IMPORTANT: Update this IP if your phone IP changes
 CAMERA_URL = "http://10.194.60.125:8080/video" 
 
 REGISTERED_FACES_DIR = "registered_faces"
@@ -39,7 +39,7 @@ HISTORY_FILE = "attendance_history.json"
 SIMILARITY_THRESHOLD = 0.60  
 FLASK_PORT = 5050 
 
-# --- GLOBAL STATE ---
+# GLOBAL STATE 
 is_session_active = False 
 attendance_records = {} 
 last_marked_time = {} 
@@ -93,12 +93,12 @@ def send_email_thread(absent_students):
             msg.attach(MIMEText(body, 'plain'))
             server.send_message(msg)
         server.quit()
-    except Exception as e: print(f"❌ Email Error: {e}")
+    except Exception as e: print(f"Email Error: {e}")
 
 try:
     app = FaceAnalysis(name='buffalo_l', providers=['CoreMLExecutionProvider', 'CPUExecutionProvider'])
     app.prepare(ctx_id=-1, det_size=(640, 640)) 
-    print("✅ AI Engine Ready.")
+    print("AI Engine Ready.")
 except Exception as e:
     sys.exit(1)
 

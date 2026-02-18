@@ -18,9 +18,9 @@ MIN_FACE_SIZE = 80
 try:
     app = FaceAnalysis(name='buffalo_l', providers=['CUDAExecutionProvider', 'CPUExecutionProvider'])
     app.prepare(ctx_id=0, det_size=(640, 640)) 
-    print("✅ InsightFace model loaded.")
+    print("InsightFace model loaded.")
 except Exception as e:
-    print(f"❌ Error initializing InsightFace: {e}")
+    print(f"Error initializing InsightFace: {e}")
     exit()
 
 embeddings = {}
@@ -28,7 +28,7 @@ processed_count = 0
 failed_count = 0
 
 if not os.path.exists(REGISTERED_FACES_DIR):
-    print(f"❌ '{REGISTERED_FACES_DIR}' not found.")
+    print(f" '{REGISTERED_FACES_DIR}' not found.")
     exit()
 
 print(f"Scanning images in '{REGISTERED_FACES_DIR}'...")
@@ -69,16 +69,16 @@ for filename in os.listdir(REGISTERED_FACES_DIR):
                 embedding = embedding / norm # Normalize to length 1.0
 
             embeddings[reg_no] = embedding
-            print(f"✅ Registered: {reg_no}")
+            print(f"Registered: {reg_no}")
             processed_count += 1
         else:
-            print(f"⚠️ No face found: {filename}")
+            print(f"No face found: {filename}")
             failed_count += 1
 
 # --- Save ---
 if embeddings:
     with open(EMBEDDINGS_FILE, "wb") as f:
         pickle.dump(embeddings, f)
-    print(f"\n✅ DATABASE UPDATED: {processed_count} students saved.")
+    print(f"\n DATABASE UPDATED: {processed_count} students saved.")
 else:
-    print(f"\n❌ No embeddings generated.")
+    print(f"\n No embeddings generated.")

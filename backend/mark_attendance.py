@@ -6,35 +6,31 @@ import os
 from datetime import datetime, timedelta
 from insightface.app import FaceAnalysis
 
-# Load precomputed embeddings
+#Load precomputed embeddings
 with open("embeddings.pkl", "rb") as f:
     known_embeddings = pickle.load(f)
 
-# Initialize face analysis
+#Initialize face analysis
 app = FaceAnalysis()
 app.prepare(ctx_id=0, det_size=(640, 640))
 
-# Class config
-# CLASS_DURATION = 3600  # 1 hour in seconds
-# LATE_LIMIT = 600       # 10 minutes
-# PRESENT_THRESHOLD = 0.7  # 70%
 
 start_time = datetime.now()
 attendance_file = "attendance.csv"
 
-# Create CSV if not exists
+#create CSV if not exists
 if not os.path.exists(attendance_file):
     pd.DataFrame(columns=["Register_No", "Join_Time", "Leave_Time", "Duration", "Status"]).to_csv(attendance_file, index=False)
 
-# Camera feed
-url = "http://10.194.60.125:8080/video"  # update with your current phone URL
+#camera feed
+url = "http://10.194.60.125:8080/video"  
 
 cap = cv2.VideoCapture(url)
 
 def cosine_similarity(a, b):
     return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
 
-# Store detection times
+#store detection times
 presence_times = {}
 
 while True:
@@ -59,13 +55,13 @@ while True:
         if best_match:
             if best_match not in presence_times:
                 presence_times[best_match] = {"join": current_time, "last_seen": current_time, "total": 0}
-                print(f"🟢 {best_match} joined at {current_time.strftime('%H:%M:%S')}")
+                print(f"{best_match} joined at {current_time.strftime('%H:%M:%S')}")
             else:
                 last_seen = presence_times[best_match]["last_seen"]
                 presence_times[best_match]["total"] += (current_time - last_seen).total_seconds()
                 presence_times[best_match]["last_seen"] = current_time
 
-            # Draw box
+            #Draw box
             box = face.bbox.astype(int)
             cv2.rectangle(frame, (box[0], box[1]), (box[2], box[3]), (0, 255, 0), 2)
             cv2.putText(frame, best_match, (box[0], box[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
@@ -74,7 +70,7 @@ while True:
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
-# After class end
+#after class end
 end_time = datetime.now()
 records = []
 
@@ -99,4 +95,4 @@ for reg_no, data in presence_times.items():
 pd.DataFrame(records).to_csv(attendance_file, index=False)
 cap.release()
 cv2.destroyAllWindows()
-print("✅ Attendance evaluation complete. Check attendance.csv.")
+print(" Attendance evaluation complete. Check attendance.csv.")

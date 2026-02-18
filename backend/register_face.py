@@ -21,7 +21,7 @@ try:
     app.prepare(ctx_id=0, det_size=(640, 640)) # Try ctx_id=-1 if you don't have a GPU or face issues
     print("✅ InsightFace model loaded for live detection feedback.")
 except Exception as e:
-    print(f"❌ Error initializing InsightFace: {e}")
+    print(f" Error initializing InsightFace: {e}")
     print("Please ensure insightface is installed and models are downloaded. Falling back to no live detection feedback.")
     app = None # Disable live detection feedback if InsightFace fails
 
@@ -32,22 +32,22 @@ print(f"Connecting to camera: {CAMERA_URL}")
 cap = cv2.VideoCapture(CAMERA_URL)
 
 if not cap.isOpened():
-    print(f"❌ Could not connect to camera at {CAMERA_URL}!")
+    print(f" Could not connect to camera at {CAMERA_URL}!")
     print("Please check the camera URL and ensure the camera is active.")
     exit()
 else:
-    print("✅ Camera connected successfully.")
+    print("✅Camera connected successfully.")
 
 # --- Student Details Input ---
 reg_no = input("Enter Register Number: ").strip()
 if not reg_no:
-    print("❌ Register Number cannot be empty. Exiting.")
+    print(" Register Number cannot be empty. Exiting.")
     cap.release()
     exit()
 
 
 
-print(f"🟢 Starting live preview for student {reg_no} — press 's' to save, 'q' to quit.")
+print(f" Starting live preview for student {reg_no} — press 's' to save, 'q' to quit.")
 print("   (Note: Image will only save if a face is detected in the frame.)")
 
 count = 0
@@ -80,7 +80,7 @@ while True:
         cv2.putText(display_frame, "InsightFace not loaded (no live detection feedback)", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2, cv2.LINE_AA)
 
 
-    # Show live feed
+    #show live feed
     cv2.imshow("Capture Student Face", display_frame)
 
     key = cv2.waitKey(1) & 0xFF
@@ -94,7 +94,7 @@ while True:
         else:
             print("⚠️ No face detected. Cannot save image. Please ensure your face is clearly visible.")
     elif key == ord('q'):
-        print("👋 Exiting capture.")
+        print("Exiting capture.")
         break
 
 # --- Cleanup ---
