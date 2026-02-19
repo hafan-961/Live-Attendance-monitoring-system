@@ -30,7 +30,7 @@ SENDER_EMAIL = "dsr.lovely.professional@gmail.com"
 SENDER_PASSWORD = "ysfmjnuejldjkdyv" 
 
 #IMPORTANT: Update this IP if your phone IP changes
-CAMERA_URL = "http://10.194.60.125:8080/video" 
+CAMERA_URL = "http://10.172.11.157:8080/video" 
 
 REGISTERED_FACES_DIR = "registered_faces"
 EMBEDDINGS_FILE = "embeddings.pkl"
