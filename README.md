@@ -6,7 +6,7 @@
 ![InsightFace](https://img.shields.io/badge/AI-InsightFace_Buffalo__L-orange.svg)
 ![DeepFace](https://img.shields.io/badge/FER-DeepFace-red.svg)
 
-An end-to-end **Biometric Attendance System** that leverages Computer Vision and Deep Learning to automate classroom management. Beyond simple identification, the system performs **Facial Emotion Recognition (FER)** to provide teachers with real-time "Class Vibe" analytics and automated absentee notifications.
+An end-to-end **Biometric Attendance System** that leverages Computer Vision and Deep Learning to automate classroom attendance. Beyond simple identification, the system performs **Facial Emotion Recognition (FER)** to provide teachers with real-time "Class Vibe" analytics and automated absentee notifications.
 
 ---
 
