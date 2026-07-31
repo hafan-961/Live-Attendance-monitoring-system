@@ -9,7 +9,12 @@
 An end-to-end **Biometric Attendance System** that leverages Computer Vision and Deep Learning to automate classroom attendance. Beyond simple identification, the system performs **Facial Emotion Recognition (FER)** to provide teachers with real-time "Class Vibe" analytics and automated absentee notifications.
 
 ---
+## Live Demo 
 
+https://github.com/user-attachments/assets/20396f07-469b-40e5-91f8-3b4326a3f5fd
+
+
+---
 ## 🌟 Key Features
 
 | Feature | Description |
