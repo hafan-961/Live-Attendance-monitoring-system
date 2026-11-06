@@ -41,6 +41,7 @@ https://github.com/user-attachments/assets/20396f07-469b-40e5-91f8-3b4326a3f5fd
 - **Multi-threading** — Concurrent capture, processing, and web serving
 - **Pickle & JSON** — Hybrid storage for binary embeddings and student metadata
 - **SMTP** - email alerts
+- **MongoDB / PyMongo** — Database storage for student details and attendance history
 
 ### Frontend (JavaScript)
 - **React.js** — Single-page dashboard with real-time state synchronization
